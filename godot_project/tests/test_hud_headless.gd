@@ -791,22 +791,54 @@ func _process(_delta: float) -> bool:
 		printerr("FAIL: Spirit Owl Rank 2 upgrade or 'summon_familiar' / 'step_familiar' RPC failed: up=", up_owl_rpc, " step=", step_owl_rpc)
 		quit(1)
 		return true
-	print("PASS [55/56]: Spirit Owl Rank 2 Upgrade & UDP RPCs verified (Bolt Dmg %d->%d, Total Owl Bolts=%d)." % [
+	print("PASS [55/58]: Spirit Owl Rank 2 Upgrade & UDP RPCs verified (Bolt Dmg %d->%d, Total Owl Bolts=%d)." % [
 		dmg_r1,
 		dmg_r2,
 		int(owl_snap.get("total_familiar_bolts_fired", 0))
 	])
 
-	# 56. Verify Failure Mode / Missing File Boundary Error Banner
+	# 56. Verify Live In-Game Combat Telemetry & Rolling 5s DPS Meter Analytics ([K] Key / get_combat_telemetry_summary)
+	arena.record_combat_damage(45, 0.5)
+	var ct_summary: Dictionary = arena.get_combat_telemetry_summary()
+	var r_dps_val: float = float(ct_summary.get("rolling_dps", 0.0))
+	var tot_dmg_val: int = int(ct_summary.get("total_damage_dealt", 0))
+	var tot_hits_val: int = int(ct_summary.get("total_hits_landed", 0))
+	var max_hit_val: int = int(ct_summary.get("highest_single_hit", 0))
+	if r_dps_val <= 0.0 or tot_dmg_val < 500 or tot_hits_val < 15 or max_hit_val < 45 or int(ct_summary.get("elemental_procs_total", 0)) < 3:
+		printerr("FAIL: Combat Telemetry & Rolling DPS summary invalid: ", ct_summary)
+		quit(1)
+		return true
+	print("PASS [56/58]: Combat Telemetry & Rolling DPS Analytics verified (Rolling DPS=%.1f/s, Total Dmg=%d, Hits=%d, Max Hit=%d, Elem Procs=%d)." % [
+		r_dps_val,
+		tot_dmg_val,
+		tot_hits_val,
+		max_hit_val,
+		int(ct_summary.get("elemental_procs_total", 0))
+	])
+
+	# 57. Verify Combat Telemetry Overlay Toggle ([K] Key / "toggle_telemetry_overlay" & "get_combat_telemetry" UDP RPCs)
+	var tog_ct_rpc: Dictionary = udp_bridge.execute_remote_command("toggle_telemetry_overlay", {})
+	var get_ct_rpc: Dictionary = udp_bridge.execute_remote_command("get_combat_telemetry", {})
+	var ct_snap: Dictionary = get_ct_rpc.get("snapshot", {})
+	if not arena.telemetry_overlay_visible or not bool(ct_snap.get("telemetry_overlay_visible", false)) or int(ct_snap.get("total_damage_dealt", 0)) < 500 or float(ct_snap.get("rolling_dps", 0.0)) <= 0.0:
+		printerr("FAIL: 'toggle_telemetry_overlay' or 'get_combat_telemetry' RPC failed: tog=", tog_ct_rpc, " get=", get_ct_rpc)
+		quit(1)
+		return true
+	print("PASS [57/58]: Combat Telemetry Overlay [K] & UDP RPCs verified (Overlay visible=%s, Snapshot Rolling DPS=%.1f/s)." % [
+		str(arena.telemetry_overlay_visible),
+		float(ct_snap.get("rolling_dps", 0.0))
+	])
+
+	# 58. Verify Failure Mode / Missing File Boundary Error Banner
 	hud.toggle_arena_mode()
 	var missing_res: Dictionary = loader.load_character_data("res://data/NonExistentChaosFile.json")
 	if not missing_res.is_empty() or not hud.error_banner.visible:
 		printerr("FAIL: Missing file error banner did not trigger.")
 		quit(1)
 		return true
-	print("PASS [56/56]: Missing-file error state verified -> ", hud.error_banner.text)
+	print("PASS [58/58]: Missing-file error state verified -> ", hud.error_banner.text)
 
-	print("=== ALL 56 HEADLESS HUD, ARENA, ROSTER, ULTIMATES, BOSS, RELICS, SFX, POTIONS, PILLARS, CRITS, ENEMY BOLTS, PARRY, HAZARDS, FRENZY, AI PILOT, PIXEL-ART SPRITES, DUNGEON CRAWLER, BOSS ENRAGE, ELEMENTAL INFUSIONS, MERCHANT SHOP, SPIKE TRAPS, MIMICS, RESPAWN [R], TALENT TREE [T], FLOOR DESCENT [X], BOUNTY BOARD [J], TITLE SCREEN, SPIRIT OWL FAMILIAR [Z], UDP & SAVE/LOAD TESTS PASSED ===")
+	print("=== ALL 58 HEADLESS HUD, ARENA, ROSTER, ULTIMATES, BOSS, RELICS, SFX, POTIONS, PILLARS, CRITS, ENEMY BOLTS, PARRY, HAZARDS, FRENZY, AI PILOT, PIXEL-ART SPRITES, DUNGEON CRAWLER, BOSS ENRAGE, ELEMENTAL INFUSIONS, MERCHANT SHOP, SPIKE TRAPS, MIMICS, RESPAWN [R], TALENT TREE [T], FLOOR DESCENT [X], BOUNTY BOARD [J], TITLE SCREEN, SPIRIT OWL FAMILIAR [Z], DPS TELEMETRY [K], UDP & SAVE/LOAD TESTS PASSED ===")
 	_main_instance.queue_free()
 	quit(0)
 	return true

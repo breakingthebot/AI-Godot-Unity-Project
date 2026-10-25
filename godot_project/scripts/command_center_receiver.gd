@@ -272,6 +272,14 @@ func execute_remote_command(command_name: String, payload: Dictionary = {}) -> D
 				var f_dt: float = float(payload.get("delta", 1.2))
 				var sf_res: Dictionary = arena.step_familiar(f_dt)
 				action_note = "Remote RPC stepped Spirit Owl Familiar -> %d bolts, %d coins" % [int(sf_res.get("bolts_fired", 0)), int(sf_res.get("coins_fetched", 0))]
+		"toggle_telemetry_overlay":
+			if arena != null and arena.has_method("toggle_telemetry_overlay"):
+				var to_res: Dictionary = arena.toggle_telemetry_overlay()
+				action_note = "Remote RPC toggled Combat Telemetry & DPS Overlay -> %s (DPS: %.1f)" % [str(to_res.get("telemetry_overlay_visible", false)), float(to_res.get("rolling_dps", 0.0))]
+		"get_combat_telemetry":
+			if arena != null and arena.has_method("get_combat_telemetry_summary"):
+				var ct_res: Dictionary = arena.get_combat_telemetry_summary()
+				action_note = "Remote RPC queried Combat Telemetry -> Total Dmg: %d, Rolling DPS: %.1f" % [int(ct_res.get("total_damage_dealt", 0)), float(ct_res.get("rolling_dps", 0.0))]
 		"toggle_mute":
 			if sfx_node != null and sfx_node.has_method("toggle_mute"):
 				var muted_now: bool = sfx_node.toggle_mute()
@@ -385,6 +393,11 @@ func build_telemetry_snapshot() -> Dictionary:
 		"familiar_rank": int(arena.familiar_rank) if arena != null else 0,
 		"total_familiar_bolts_fired": int(arena.total_familiar_bolts_fired) if arena != null else 0,
 		"total_familiar_loot_fetched": int(arena.total_familiar_loot_fetched) if arena != null else 0,
+		"telemetry_overlay_visible": bool(arena.telemetry_overlay_visible) if arena != null else false,
+		"rolling_dps": snappedf(arena.get_rolling_dps(), 0.1) if (arena != null and arena.has_method("get_rolling_dps")) else 0.0,
+		"total_damage_dealt": int(arena.total_damage_dealt) if arena != null else 0,
+		"total_hits_landed": int(arena.total_hits_landed) if arena != null else 0,
+		"highest_single_hit": int(arena.highest_single_hit) if arena != null else 0,
 		"sfx_muted": bool(sfx_node.muted) if sfx_node != null else false,
 		"total_sfx_played": int(sfx_node.total_sfx_played) if sfx_node != null else 0,
 		"high_wave_reached": int(loader.high_wave_reached) if loader != null else 1,

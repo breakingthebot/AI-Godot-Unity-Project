@@ -181,6 +181,12 @@ var familiar_orbit_angle: float = 0.0
 var _familiar_fire_accum: float = 0.0
 var total_familiar_bolts_fired: int = 0
 var total_familiar_loot_fetched: int = 0
+var telemetry_overlay_visible: bool = false
+var total_damage_dealt: int = 0
+var total_hits_landed: int = 0
+var highest_single_hit: int = 0
+var combat_elapsed_seconds: float = 0.0
+var _dps_window_events: Array[Dictionary] = []
 
 const FAMILIAR_ORBIT_RADIUS: float = 48.0
 const FAMILIAR_ORBIT_SPEED: float = 2.6
@@ -188,6 +194,7 @@ const FAMILIAR_BASE_FIRE_INTERVAL: float = 1.1
 const FAMILIAR_BASE_DAMAGE: int = 9
 const FAMILIAR_UPGRADE_GOLD_COST: int = 30
 const FAMILIAR_LOOT_FETCH_RADIUS: float = 220.0
+const DPS_ROLLING_WINDOW_SECONDS: float = 5.0
 
 var _ui_layer: CanvasLayer
 var _status_label: Label
@@ -198,6 +205,7 @@ var _stance_btn: Button
 var _talent_btn: Button
 var _bounty_btn: Button
 var _familiar_btn: Button
+var _telemetry_btn: Button
 var _sfx_btn: Button
 
 
@@ -1810,6 +1818,88 @@ func step_familiar(delta: float) -> Dictionary:
 	}
 
 
+## Records a combat hit into the Rolling 5s DPS window and session combat analytics counters.
+func record_combat_damage(dmg_amount: int, time_step: float = 0.0) -> void:
+	var clean_dmg: int = maxi(0, dmg_amount)
+	if time_step > 0.0:
+		combat_elapsed_seconds += time_step
+	total_damage_dealt += clean_dmg
+	total_hits_landed += 1
+	highest_single_hit = maxi(highest_single_hit, clean_dmg)
+	_dps_window_events.append({
+		"t": combat_elapsed_seconds,
+		"dmg": clean_dmg
+	})
+	var cutoff: float = combat_elapsed_seconds - DPS_ROLLING_WINDOW_SECONDS
+	var kept: Array[Dictionary] = []
+	for ev in _dps_window_events:
+		if float(ev.get("t", 0.0)) >= cutoff:
+			kept.append(ev)
+	_dps_window_events = kept
+
+
+## Computes the rolling 5-second DPS (Damage Per Second) across recent combat hits.
+func get_rolling_dps() -> float:
+	if _dps_window_events.is_empty():
+		return 0.0
+	var cutoff: float = combat_elapsed_seconds - DPS_ROLLING_WINDOW_SECONDS
+	var window_dmg: int = 0
+	for ev in _dps_window_events:
+		if float(ev.get("t", 0.0)) >= cutoff:
+			window_dmg += int(ev.get("dmg", 0))
+	var denom: float = clampf(combat_elapsed_seconds, 1.0, DPS_ROLLING_WINDOW_SECONDS)
+	return float(window_dmg) / denom
+
+
+## Builds a structured dictionary of live in-game combat analytics and rolling DPS metrics.
+func get_combat_telemetry_summary() -> Dictionary:
+	var elem_procs: int = total_chilled_hits + total_elemental_burn_ticks + total_stormchain_arcs
+	var obs_crit_pct: int = int(round(float(total_critical_hits) / float(maxi(1, total_hits_landed)) * 100.0))
+	return {
+		"telemetry_overlay_visible": telemetry_overlay_visible,
+		"rolling_dps": snappedf(get_rolling_dps(), 0.1),
+		"total_damage_dealt": total_damage_dealt,
+		"total_hits_landed": total_hits_landed,
+		"highest_single_hit": highest_single_hit,
+		"total_critical_hits": total_critical_hits,
+		"observed_crit_rate_pct": obs_crit_pct,
+		"calculated_crit_chance_pct": int(round(get_calculated_crit_chance() * 100.0)),
+		"total_projectiles_parried": total_projectiles_parried,
+		"obstacle_blocks_count": obstacle_blocks_count,
+		"elemental_procs_total": elem_procs,
+		"total_familiar_bolts_fired": total_familiar_bolts_fired,
+		"total_enemies_defeated": total_enemies_defeated,
+		"total_gold_earned": total_gold_earned,
+		"ai_pilot_active": ai_pilot_active,
+		"ai_decisions_count": ai_decisions_count,
+		"ai_last_action": ai_last_action
+	}
+
+
+## Toggles the Live In-Game Combat Telemetry & Rolling DPS Meter Overlay ([K] Key / "DPS [K]" Button / "toggle_telemetry_overlay" RPC).
+func toggle_telemetry_overlay() -> Dictionary:
+	telemetry_overlay_visible = not telemetry_overlay_visible
+	if _telemetry_btn != null:
+		_telemetry_btn.text = "DPS: ON [K]" if telemetry_overlay_visible else "DPS: OFF [K]"
+	var state_str := "ON" if telemetry_overlay_visible else "OFF"
+	var msg := "[Combat Telemetry & DPS Meter: %s [K]] Rolling DPS: %.1f/s | Total Dmg: %d | Hits: %d | Max Hit: %d | Crits: %d!" % [
+		state_str,
+		get_rolling_dps(),
+		total_damage_dealt,
+		total_hits_landed,
+		highest_single_hit,
+		total_critical_hits
+	]
+	if _combat_banner != null:
+		_combat_banner.text = msg
+	arena_combat_event.emit(msg)
+	queue_redraw()
+	var summary := get_combat_telemetry_summary()
+	summary["status"] = "toggled"
+	summary["message"] = msg
+	return summary
+
+
 func _build_arena_overlay() -> void:
 	_ui_layer = CanvasLayer.new()
 	_ui_layer.name = "ArenaOverlay"
@@ -1936,6 +2026,12 @@ func _build_arena_overlay() -> void:
 	_familiar_btn.text = "Familiar: OFF [Z]"
 	_familiar_btn.pressed.connect(func() -> void: summon_or_upgrade_familiar())
 	hbox.add_child(_familiar_btn)
+
+	_telemetry_btn = Button.new()
+	_telemetry_btn.name = "TelemetryOverlayButton"
+	_telemetry_btn.text = "DPS: OFF [K]"
+	_telemetry_btn.pressed.connect(func() -> void: toggle_telemetry_overlay())
+	hbox.add_child(_telemetry_btn)
 
 	_sfx_btn = Button.new()
 	_sfx_btn.name = "SfxMuteButton"
@@ -2844,6 +2940,7 @@ func apply_damage_to_dummy(dummy_index: int, damage: int, is_crit: bool = false,
 	var final_damage: int = damage * CRIT_DAMAGE_MULTIPLIER if crit_active else damage
 	if crit_active:
 		total_critical_hits += 1
+	record_combat_damage(final_damage)
 
 	_play_sfx("hit")
 	var d_pos: Vector2 = dummy.get("pos", Vector2(760.0, 200.0))
@@ -3019,6 +3116,8 @@ func _unhandled_input(event: InputEvent) -> void:
 				claim_or_advance_bounties()
 			elif ke.keycode == KEY_Z:
 				summon_or_upgrade_familiar()
+			elif ke.keycode == KEY_K:
+				toggle_telemetry_overlay()
 
 
 func _process(delta: float) -> void:
@@ -3099,6 +3198,7 @@ func _process(delta: float) -> void:
 
 	# 4. Step Floating Combat Text popups, Pixel-Spark Particles, and decay hit flash timers
 	_anim_time += delta
+	combat_elapsed_seconds += delta
 	step_floating_texts(delta)
 	step_particles(delta)
 	for i in range(dummies.size()):
@@ -3570,9 +3670,39 @@ func _draw() -> void:
 			draw_string(font, f_pos + Vector2(-26, 1), f_text, HORIZONTAL_ALIGNMENT_LEFT, -1, f_size, shadow_col)
 			draw_string(font, f_pos + Vector2(-27, 0), f_text, HORIZONTAL_ALIGNMENT_LEFT, -1, f_size, draw_col)
 
-	# 11. Live Top-Right Dungeon Minimap & Top-Left Quest Bounty Log Overlays
+	# 11. Live Top-Right Dungeon Minimap, Top-Left Quest Bounty Log & Combat Telemetry Overlays
 	_draw_dungeon_minimap(font)
 	_draw_bounty_tracker(font)
+	_draw_telemetry_overlay(font)
+
+
+func _draw_telemetry_overlay(font: Font) -> void:
+	if font == null or not telemetry_overlay_visible:
+		return
+	var panel_rect := Rect2(Vector2(56.0, 202.0), Vector2(248.0, 152.0))
+	draw_rect(panel_rect, Color(0.04, 0.07, 0.11, 0.88), true)
+	draw_rect(panel_rect, Color(0.38, 0.92, 1.0, 0.92), false, 1.8)
+	draw_string(font, panel_rect.position + Vector2(8, 15), "COMBAT TELEMETRY & DPS [K]", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(0.45, 0.96, 1.0))
+
+	var r_dps: float = get_rolling_dps()
+	var bar_bg := Rect2(panel_rect.position + Vector2(8, 21), Vector2(232.0, 7.0))
+	var dps_fill_ratio: float = clampf(r_dps / 120.0, 0.0, 1.0)
+	draw_rect(bar_bg, Color(0.12, 0.16, 0.22, 0.95), true)
+	draw_rect(Rect2(bar_bg.position, Vector2(bar_bg.size.x * dps_fill_ratio, bar_bg.size.y)), Color(0.35, 0.95, 0.68), true)
+
+	var elem_procs: int = total_chilled_hits + total_elemental_burn_ticks + total_stormchain_arcs
+	var obs_crit_pct: int = int(round(float(total_critical_hits) / float(maxi(1, total_hits_landed)) * 100.0))
+	var rows: Array[String] = [
+		"Rolling DPS: %.1f/s | Total Dmg: %d" % [r_dps, total_damage_dealt],
+		"Hits: %d | Max Hit: %d | Crits: %d (%d%%)" % [total_hits_landed, highest_single_hit, total_critical_hits, obs_crit_pct],
+		"Parries [F]: %d | Cover Blocks: %d" % [total_projectiles_parried, obstacle_blocks_count],
+		"Elemental Procs: %d | Owl Bolts: %d" % [elem_procs, total_familiar_bolts_fired],
+		"Slain: %d | Gold Earned: %dg" % [total_enemies_defeated, total_gold_earned],
+		"AI Pilot [P]: %s (%d ops)" % [ai_last_action.to_upper(), ai_decisions_count]
+	]
+	for i in range(rows.size()):
+		var col := Color(0.95, 0.92, 0.55) if i == 0 else Color(0.84, 0.90, 0.96)
+		draw_string(font, panel_rect.position + Vector2(8, 42 + i * 19), rows[i], HORIZONTAL_ALIGNMENT_LEFT, -1, 10, col)
 
 
 func _draw_bounty_tracker(font: Font) -> void:

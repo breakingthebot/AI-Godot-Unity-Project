@@ -1,5 +1,9 @@
 # Changelog
 
+## [3.0.0] - 2026-10-25
+- Add Live In-Game Combat Telemetry & Rolling 5s DPS Meter Overlay (`record_combat_damage()`, `get_rolling_dps()`, `get_combat_telemetry_summary()`, `toggle_telemetry_overlay()`, `_draw_telemetry_overlay()` via **`[K]` key**, **`"DPS: OFF [K]"` button**, and `"toggle_telemetry_overlay"` / `"get_combat_telemetry"` UDP RPCs) displaying rolling 5s DPS with a live meter bar, Total Damage Dealt, Hits Landed, Max Single Hit, Observed Crit Rate %, Parries, Cover Blocks, Elemental Procs, Spirit Owl Bolts, Gold Earned, and AI Pilot ops.
+- Expand headless Godot test suite to 58/58 assertions (`godot_project/tests/test_hud_headless.gd`).
+
 ## [2.9.0] - 2026-10-25
 - Add Companion Familiar Pet (`summon_or_upgrade_familiar()`, `get_familiar_bolt_damage()`, `step_familiar()` via **`[Z]` key**, **`"Familiar: OFF [Z]"` button**, and `"summon_familiar"` / `"step_familiar"` UDP RPCs) summoning a 2-frame animated **Ashen Spirit Owl** (`companion_owl_0.png` / `companion_owl_1.png`, bringing total exported `.png` sprites to 36) that orbits the hero, automatically fires Wisdom-scaled Arcane Bolts at nearby enemies, and swoops out (`220 px` radius) to fetch Gold Coins.
 - Expand headless Godot test suite to 56/56 assertions (`godot_project/tests/test_hud_headless.gd`).
