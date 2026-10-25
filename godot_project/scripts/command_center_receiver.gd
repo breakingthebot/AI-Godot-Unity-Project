@@ -223,6 +223,11 @@ func execute_remote_command(command_name: String, payload: Dictionary = {}) -> D
 				var target_st: String = str(payload.get("stance", ""))
 				var st_res: Dictionary = arena.cycle_elemental_stance(target_st)
 				action_note = "Remote RPC cycled Elemental Infusion Stance -> %s" % str(st_res.get("elemental_stance", "none"))
+		"buy_upgrade":
+			if arena != null and arena.has_method("buy_merchant_upgrade"):
+				var item_k: String = str(payload.get("item_key", ""))
+				var b_res: Dictionary = arena.buy_merchant_upgrade(item_k)
+				action_note = "Remote RPC bought merchant upgrade -> %s" % str(b_res.get("item_key", b_res.get("error", "none")))
 		"toggle_mute":
 			if sfx_node != null and sfx_node.has_method("toggle_mute"):
 				var muted_now: bool = sfx_node.toggle_mute()
@@ -314,6 +319,10 @@ func build_telemetry_snapshot() -> Dictionary:
 		"total_chilled_hits": int(arena.total_chilled_hits) if arena != null else 0,
 		"total_elemental_burn_ticks": int(arena.total_elemental_burn_ticks) if arena != null else 0,
 		"total_stormchain_arcs": int(arena.total_stormchain_arcs) if arena != null else 0,
+		"gold_coins": int(arena.gold_coins) if arena != null else 0,
+		"total_gold_earned": int(arena.total_gold_earned) if arena != null else 0,
+		"shop_bonus_damage": int(arena.shop_bonus_damage) if arena != null else 0,
+		"shop_purchases_count": int(arena.shop_purchases_count) if arena != null else 0,
 		"sfx_muted": bool(sfx_node.muted) if sfx_node != null else false,
 		"total_sfx_played": int(sfx_node.total_sfx_played) if sfx_node != null else 0,
 		"high_wave_reached": int(loader.high_wave_reached) if loader != null else 1,

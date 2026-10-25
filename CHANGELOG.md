@@ -1,5 +1,9 @@
 # Changelog
 
+## [2.4.0] - 2026-10-25
+- Add Gold Coin Drop Economy (`spawn_coin_drop()`, `step_coin_drops()`, `+20g` per enemy kill, `+60g` per Boss kill, and `160 px` magnetized coin pickup) and Hooded Dungeon Merchant NPC Shop (`buy_merchant_upgrade()` via `[B]` key, `"Merchant [B]"` button, and `"buy_upgrade"` UDP RPC offering **Ashen Whetstone** `+3 Dmg` for `35g`, **Obsidian Plate** `+15 Max HP` for `40g`, and **Ashen Healing Elixir** `+1 Potion` for `25g`).
+- Add `npc_merchant.png` and `prop_coin.png` pixel-art sprites to `sprite_art_generator.gd` (bringing total exported `.png` sprites to 27) and expand headless Godot test suite to 46/46 assertions (`godot_project/tests/test_hud_headless.gd`).
+
 ## [2.3.0] - 2026-10-25
 - Add Elemental Weapon Infusion Stance system (`cycle_elemental_stance()`, `apply_elemental_infusion_on_hit()`, `step_elemental_statuses()` via `[V]` key, `"Infusion: NONE [V]"` button, and `"cycle_stance"` UDP RPC) supporting **Frostbite** (`-35%` enemy chase speed for `3.5s`), **Cinderbrand** (stacking `+5` fire burn DoT every `0.5s`), and **Stormchain** (arcing `50%` chain-lightning damage to a nearby secondary enemy with crackling 4-segment lightning bolt visuals).
 - Expand headless Godot test suite to 44/44 assertions (`godot_project/tests/test_hud_headless.gd`).

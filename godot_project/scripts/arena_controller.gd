@@ -70,6 +70,11 @@ const CINDER_DURATION: float = 3.0
 const CINDER_BURN_DAMAGE_PER_STACK: int = 5
 const STORMCHAIN_RANGE: float = 340.0
 const STORMCHAIN_RATIO: float = 0.50
+const ENEMY_GOLD_REWARD: int = 20
+const BOSS_GOLD_REWARD: int = 60
+const COIN_MAGNET_RADIUS: float = 160.0
+const COIN_PICKUP_RADIUS: float = 28.0
+const MERCHANT_POS: Vector2 = Vector2(210.0, 175.0)
 
 var loader: Node = null
 var sfx_node: Node = null
@@ -133,6 +138,12 @@ var _elemental_burn_accum: float = 0.0
 var total_chilled_hits: int = 0
 var total_elemental_burn_ticks: int = 0
 var total_stormchain_arcs: int = 0
+var gold_coins: int = 0
+var total_gold_earned: int = 0
+var coin_drops: Array[Dictionary] = []
+var shop_bonus_damage: int = 0
+var shop_bonus_max_hp: int = 0
+var shop_purchases_count: int = 0
 
 var _ui_layer: CanvasLayer
 var _status_label: Label
@@ -1059,6 +1070,129 @@ func step_elemental_statuses(delta: float) -> Dictionary:
 	}
 
 
+## Spawns a gleaming Gold Coin drop on the dungeon floor and credits gold to the hero's pouch.
+func spawn_coin_drop(world_pos: Vector2, amount: int, auto_credit: bool = false) -> Dictionary:
+	var val: int = maxi(1, amount)
+	if auto_credit:
+		gold_coins += val
+		total_gold_earned += val
+	var coin := {
+		"pos": world_pos,
+		"amount": val,
+		"credited": auto_credit,
+		"ttl": 10.0
+	}
+	coin_drops.append(coin)
+	spawn_particle_burst(world_pos, Color(1.0, 0.88, 0.25), 8, 0.95)
+	spawn_floating_text(world_pos + Vector2(0, -14), "+%dg GOLD" % val, Color(1.0, 0.88, 0.24), false)
+	_refresh_status_bar()
+	queue_redraw()
+	return coin
+
+
+## Steps active Gold Coin drops on the floor, magnetizing them toward the hero and collecting them on contact.
+func step_coin_drops(delta: float) -> int:
+	var collected_this_step: int = 0
+	var remaining: Array[Dictionary] = []
+	for coin in coin_drops:
+		var c_pos: Vector2 = coin.get("pos", Vector2.ZERO)
+		var dist: float = c_pos.distance_to(player_pos)
+		if dist <= COIN_MAGNET_RADIUS and dist > 0.001:
+			var dir := (player_pos - c_pos).normalized()
+			c_pos += dir * 320.0 * delta
+			coin["pos"] = c_pos
+			dist = c_pos.distance_to(player_pos)
+		coin["ttl"] = float(coin.get("ttl", 5.0)) - delta
+		if dist <= COIN_PICKUP_RADIUS:
+			var amt: int = int(coin.get("amount", ENEMY_GOLD_REWARD))
+			if not bool(coin.get("credited", false)):
+				gold_coins += amt
+				total_gold_earned += amt
+			collected_this_step += amt
+			_play_sfx("relic_loot")
+			_refresh_status_bar()
+			continue
+		if float(coin["ttl"]) > 0.0:
+			remaining.append(coin)
+	coin_drops = remaining
+	return collected_this_step
+
+
+## Purchases an upgrade from Vaelor the Dungeon Merchant ([B] Key / "Merchant [B]" Button / "buy_upgrade" RPC).
+func buy_merchant_upgrade(item_key: String = "") -> Dictionary:
+	var catalog := {
+		"whetstone": {"name": "Ashen Whetstone (+3 Dmg)", "cost": 35},
+		"armor": {"name": "Obsidian Plate (+15 Max HP)", "cost": 40},
+		"elixir": {"name": "Ashen Healing Elixir (+1 Potion)", "cost": 25}
+	}
+	var req := item_key.strip_edges().to_lower()
+	if req.is_empty():
+		var order := ["whetstone", "armor", "elixir"]
+		req = order[shop_purchases_count % order.size()]
+		if gold_coins < int(catalog[req]["cost"]):
+			for candidate in order:
+				if gold_coins >= int(catalog[candidate]["cost"]):
+					req = candidate
+					break
+
+	if not catalog.has(req):
+		return {"error": "Unknown merchant item '%s'" % req}
+
+	var item_info: Dictionary = catalog[req]
+	var cost: int = int(item_info["cost"])
+	var item_name: String = str(item_info["name"])
+	if gold_coins < cost:
+		var err_msg := "[Merchant: Vaelor] Need %dg for %s (You have %dg)!" % [cost, item_name, gold_coins]
+		if _combat_banner != null:
+			_combat_banner.text = err_msg
+		return {"error": "Insufficient gold", "required_gold": cost, "current_gold": gold_coins, "message": err_msg}
+
+	gold_coins -= cost
+	shop_purchases_count += 1
+
+	match req:
+		"whetstone":
+			shop_bonus_damage += 3
+		"armor":
+			shop_bonus_max_hp += 15
+			if loader != null and not loader.current_data.is_empty():
+				var h: Dictionary = loader.current_data.get("health", {"current": 45, "max": 45})
+				h["max"] = int(h.get("max", 45)) + 15
+				h["current"] = mini(int(h["max"]), int(h.get("current", 45)) + 15)
+				loader.current_data["health"] = h
+		"elixir":
+			if loader != null and loader.has_method("grant_consumable_potion"):
+				loader.grant_consumable_potion(1)
+
+	spawn_particle_burst(player_pos, Color(1.0, 0.88, 0.25), 18, 1.3)
+	spawn_floating_text(player_pos + Vector2(0, -22), "BOUGHT: %s!" % req.to_upper(), Color(1.0, 0.90, 0.28), true)
+	_play_sfx("level_up")
+
+	var msg := "[Dungeon Merchant -> Purchased %s (-%dg)] Gold Remaining: %dg (Shop Upgrades: %d, Bonus Dmg: +%d)!" % [
+		item_name,
+		cost,
+		gold_coins,
+		shop_purchases_count,
+		shop_bonus_damage
+	]
+	if _combat_banner != null:
+		_combat_banner.text = msg
+	arena_combat_event.emit(msg)
+	_refresh_status_bar()
+	queue_redraw()
+	return {
+		"status": "purchased",
+		"item_key": req,
+		"item_name": item_name,
+		"cost": cost,
+		"gold_remaining": gold_coins,
+		"shop_bonus_damage": shop_bonus_damage,
+		"shop_bonus_max_hp": shop_bonus_max_hp,
+		"shop_purchases_count": shop_purchases_count,
+		"message": msg
+	}
+
+
 func _build_arena_overlay() -> void:
 	_ui_layer = CanvasLayer.new()
 	_ui_layer.name = "ArenaOverlay"
@@ -1149,6 +1283,12 @@ func _build_arena_overlay() -> void:
 	room_btn.text = "Next Room [N]"
 	room_btn.pressed.connect(func() -> void: enter_next_unexplored_room())
 	hbox.add_child(room_btn)
+
+	var shop_btn := Button.new()
+	shop_btn.name = "MerchantShopButton"
+	shop_btn.text = "Merchant [B]"
+	shop_btn.pressed.connect(func() -> void: buy_merchant_upgrade())
+	hbox.add_child(shop_btn)
 
 	_sfx_btn = Button.new()
 	_sfx_btn.name = "SfxMuteButton"
@@ -1567,7 +1707,7 @@ func get_calculated_arrow_damage() -> int:
 	var relic_dmg: int = 0
 	if loader.has_method("get_inventory_bonuses"):
 		relic_dmg = int(loader.get_inventory_bonuses().get("damage", 0))
-	return maxi(1, BASE_ARROW_DAMAGE + primary_rank + attr_mod + relic_dmg)
+	return maxi(1, BASE_ARROW_DAMAGE + primary_rank + attr_mod + relic_dmg + shop_bonus_damage)
 
 
 ## Calculates the active hero's Critical Hit chance (0.05 to 0.65) from Base(8%) + 3% per Dexterity/Wisdom modifier + 10% Frenzy bonus.
@@ -1961,6 +2101,8 @@ func apply_damage_to_dummy(dummy_index: int, damage: int, is_crit: bool = false,
 		var is_boss_kill: bool = bool(dummy.get("is_boss", false))
 		var score_mult: int = 300 if is_boss_kill else 100
 		wave_score += score_mult * wave_number
+		var gold_reward: int = BOSS_GOLD_REWARD if is_boss_kill else ENEMY_GOLD_REWARD
+		spawn_coin_drop(d_pos, gold_reward, true)
 		if is_boss_kill and loader != null and loader.has_method("grant_consumable_potion"):
 			loader.grant_consumable_potion(1)
 		if loader != null and loader.has_method("record_wave_progress"):
@@ -2095,6 +2237,8 @@ func _unhandled_input(event: InputEvent) -> void:
 				enter_next_unexplored_room()
 			elif ke.keycode == KEY_V:
 				cycle_elemental_stance()
+			elif ke.keycode == KEY_B:
+				buy_merchant_upgrade()
 
 
 func _process(delta: float) -> void:
@@ -2157,9 +2301,10 @@ func _process(delta: float) -> void:
 	if ai_pilot_active:
 		step_ai_pilot(delta)
 
-	# Step Environmental Hazard & Sanctuary Zones and Elemental Statuses
+	# Step Environmental Hazard & Sanctuary Zones, Elemental Statuses, and Coin Drops
 	step_hazard_zones(delta)
 	step_elemental_statuses(delta)
+	step_coin_drops(delta)
 
 	# 2. Wave Survival Enemy AI Pursuit & Contact Check
 	if wave_survival_active:
@@ -2384,6 +2529,23 @@ func _draw() -> void:
 		draw_arc(c_pos, 22.0 + sin(_anim_time * 6.0) * 2.0, 0.0, TAU, 32, Color(1.0, 0.88, 0.32, 0.75), 2.0)
 		if font != null:
 			draw_string(font, c_pos + Vector2(-42, -18), "Relic Chest [E]", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(1.0, 0.92, 0.45))
+
+	# 4B. Hooded Dungeon Merchant NPC (Vaelor the Broker) & Magnetized Gold Coin Drops
+	var merch_tex: Texture2D = sprite_gen.get_prop_texture("npc_merchant")
+	draw_circle(MERCHANT_POS + Vector2(0, 14), 16.0, Color(0.03, 0.04, 0.06, 0.55))
+	draw_arc(MERCHANT_POS, 26.0 + sin(_anim_time * 5.0) * 2.0, 0.0, TAU, 32, Color(0.98, 0.82, 0.25, 0.65), 2.0)
+	if merch_tex != null:
+		draw_texture_rect(merch_tex, Rect2(MERCHANT_POS - Vector2(22, 24), Vector2(44, 44)), false)
+	if font != null:
+		draw_string(font, MERCHANT_POS + Vector2(-62, -28), "Vaelor [B: Shop | %dg]" % gold_coins, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(1.0, 0.90, 0.38))
+
+	var coin_tex: Texture2D = sprite_gen.get_prop_texture("prop_coin")
+	for coin in coin_drops:
+		var cn_pos: Vector2 = coin.get("pos", Vector2.ZERO)
+		if coin_tex != null:
+			draw_texture_rect(coin_tex, Rect2(cn_pos - Vector2(9, 9), Vector2(18, 18)), false)
+		else:
+			draw_circle(cn_pos, 6.0, Color(1.0, 0.88, 0.22))
 
 	# 5. Active Hero Pixel-Art Character Sprite, Shadow, Auras & Held Weapon Sprite
 	var hero_color := Color(0.28, 0.78, 0.48)
@@ -2667,7 +2829,7 @@ func _refresh_status_bar() -> void:
 	var mode_tag := "WAVE %d%s (Score: %d)" % [wave_number, boss_suffix, wave_score] if wave_survival_active else "PRACTICE"
 	var crit_pct := int(round(get_calculated_crit_chance() * 100.0))
 	_status_label.text = (
-		"[%s | %s (%d/%d)] %s (Lv.%d) | HP: %s | MP: %s | %s: %d Dmg (Crit: %d%%) | [N]: Next Room"
+		"[%s | %s (%d/%d)] %s (Lv.%d) | HP: %s | MP: %s | Gold: %dg | %s: %d Dmg (Crit: %d%%) | [B]: Shop"
 		% [
 			mode_tag,
 			room_name,
@@ -2677,6 +2839,7 @@ func _refresh_status_bar() -> void:
 			level,
 			hp_str,
 			mp_str,
+			gold_coins,
 			get_primary_attack_name(),
 			get_calculated_arrow_damage(),
 			crit_pct

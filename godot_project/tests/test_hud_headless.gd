@@ -6,10 +6,11 @@
 extends SceneTree
 
 var _main_instance: Node = null
+var _done: bool = false
 
 
 func _initialize() -> void:
-	print("=== Starting Iteration 22A Headless HUD, Arena, Roster, Ultimates, Boss, Relics, SFX, Potions, Pillars, Crits, Enemy Bolts, Parry, Hazards, Frenzy, AI Pilot, Pixel-Art Sprites, Dungeon Crawler, Boss Enrage, Elemental Infusions & Save Suite ===")
+	print("=== Starting Iteration 23A Headless HUD, Arena, Roster, Ultimates, Boss, Relics, SFX, Potions, Pillars, Crits, Enemy Bolts, Parry, Hazards, Frenzy, AI Pilot, Pixel-Art Sprites, Dungeon Crawler, Boss Enrage, Elemental Infusions, Merchant Shop & Save Suite ===")
 	var main_packed: PackedScene = load("res://scenes/main.tscn")
 	if main_packed == null:
 		printerr("FAIL: Could not load res://scenes/main.tscn")
@@ -21,6 +22,9 @@ func _initialize() -> void:
 
 
 func _process(_delta: float) -> bool:
+	if _done:
+		return true
+	_done = true
 	var loader: Node = _main_instance
 	var hud: Node = _main_instance.get_node_or_null("CharacterSheetHUD") if _main_instance != null else null
 	var arena: Node = _main_instance.get_node_or_null("Arena") if _main_instance != null else null
@@ -37,7 +41,7 @@ func _process(_delta: float) -> bool:
 		printerr("FAIL: Unexpected initial HUD title: ", title_text)
 		quit(1)
 		return true
-	print("PASS [1/44]: Initial HUD title verified -> ", title_text)
+	print("PASS [1/46]: Initial HUD title verified -> ", title_text)
 
 	# 2. Verify d20 Skill Check Roll
 	var roll_res: Dictionary = loader.roll_skill_check(0)
@@ -45,7 +49,7 @@ func _process(_delta: float) -> bool:
 		printerr("FAIL: Archery skill check roll invalid: ", roll_res)
 		quit(1)
 		return true
-	print("PASS [2/44]: Skill check verified -> ", roll_res.get("summary", ""))
+	print("PASS [2/46]: Skill check verified -> ", roll_res.get("summary", ""))
 
 	# 3. Verify Combat Damage & Healing Clamping
 	loader.modify_health(-15)
@@ -58,7 +62,7 @@ func _process(_delta: float) -> bool:
 		printerr("FAIL: Expected HP clamped to 45 after heal, got: ", hud.hp_bar.value)
 		quit(1)
 		return true
-	print("PASS [3/44]: Health damage and max-HP clamp verified (30 -> 45/45).")
+	print("PASS [3/46]: Health damage and max-HP clamp verified (30 -> 45/45).")
 
 	# 4. Verify Level Up Mutation & UI Refresh (Dexterity 18 -> 19, Level 5 -> 6)
 	loader.apply_level_up()
@@ -67,7 +71,7 @@ func _process(_delta: float) -> bool:
 		printerr("FAIL: Level-up did not update HUD title/HP bar: ", updated_title)
 		quit(1)
 		return true
-	print("PASS [4/44]: Level-up verified -> ", updated_title, " (Max HP: 53)")
+	print("PASS [4/46]: Level-up verified -> ", updated_title, " (Max HP: 53)")
 
 	# 5. Verify 2D Arena Toggle & Stat-Driven Speed/Arrow Damage Scaling
 	hud.toggle_arena_mode()
@@ -82,7 +86,7 @@ func _process(_delta: float) -> bool:
 		printerr("FAIL: Expected Arena Dmg 16 & Speed 320 at Dex 20, got: ", calc_dmg, " / ", calc_spd)
 		quit(1)
 		return true
-	print("PASS [5/44]: Arena toggle & live stat scaling verified -> Speed: %d px/s, Arrow Dmg: %d" % [calc_spd, calc_dmg])
+	print("PASS [5/46]: Arena toggle & live stat scaling verified -> Speed: %d px/s, Arrow Dmg: %d" % [calc_spd, calc_dmg])
 
 	# 6. Verify Projectile Spawning in 2D Arena
 	var proj: Dictionary = arena.fire_arrow_at(Vector2(760.0, 200.0))
@@ -90,7 +94,7 @@ func _process(_delta: float) -> bool:
 		printerr("FAIL: Arrow projectile did not spawn with expected damage.")
 		quit(1)
 		return true
-	print("PASS [6/44]: Projectile spawn verified (Active projectiles: 1, Damage: 16)")
+	print("PASS [6/46]: Projectile spawn verified (Active projectiles: 1, Damage: 16)")
 
 	# 7. Verify Target Dummy Hit & HP Reduction
 	var hit_res: Dictionary = arena.apply_damage_to_dummy(0, calc_dmg)
@@ -98,7 +102,7 @@ func _process(_delta: float) -> bool:
 		printerr("FAIL: Expected Corruption Scout HP 29 after 16 dmg, got: ", hit_res)
 		quit(1)
 		return true
-	print("PASS [7/44]: Target dummy hit verified -> ", hit_res.get("message", ""))
+	print("PASS [7/46]: Target dummy hit verified -> ", hit_res.get("message", ""))
 
 	# 8. Verify Roster Switch to Slot [2] Malakor, The Ash-Knight (Str 20 (+5), Cinder Bolts Rank 6 -> Dmg 17)
 	var ash_data: Dictionary = loader.select_roster_character(1)
@@ -106,7 +110,7 @@ func _process(_delta: float) -> bool:
 		printerr("FAIL: Ash-Knight roster switch or damage calc failed: ", ash_data)
 		quit(1)
 		return true
-	print("PASS [8/44]: Slot [2] Malakor, The Ash-Knight verified -> HP: 85, Cinder Bolts Dmg: 17")
+	print("PASS [8/46]: Slot [2] Malakor, The Ash-Knight verified -> HP: 85, Cinder Bolts Dmg: 17")
 
 	# 9. Verify Roster Switch to Slot [3] Vespera, Echo-Wraith (Dex 22 (+6) -> Speed 338 px/s, Phase Daggers Dmg 18)
 	var echo_data: Dictionary = loader.select_roster_character(2)
@@ -114,7 +118,7 @@ func _process(_delta: float) -> bool:
 		printerr("FAIL: Echo-Wraith roster switch or speed calc failed: ", echo_data)
 		quit(1)
 		return true
-	print("PASS [9/44]: Slot [3] Vespera, Echo-Wraith verified -> Speed: 338 px/s, Phase Daggers Dmg: 18")
+	print("PASS [9/46]: Slot [3] Vespera, Echo-Wraith verified -> Speed: 338 px/s, Phase Daggers Dmg: 18")
 
 	# 10. Verify Mana Dash Ability (-6 MP, +145 px burst, 0.45s i-frames)
 	var pos_before_dash: Vector2 = arena.player_pos
@@ -124,7 +128,7 @@ func _process(_delta: float) -> bool:
 		printerr("FAIL: Mana Dash did not burst or deduct 6 MP cleanly: ", dash_res)
 		quit(1)
 		return true
-	print("PASS [10/44]: Mana Dash verified -> ", dash_res.get("message", ""))
+	print("PASS [10/46]: Mana Dash verified -> ", dash_res.get("message", ""))
 
 	# 11. Verify Roster Switch to Slot [4] Gorvath & Constitution Armor Mitigation in Wave Survival
 	var rot_data: Dictionary = loader.select_roster_character(3)
@@ -138,7 +142,7 @@ func _process(_delta: float) -> bool:
 		printerr("FAIL: Expected Gorvath to take 6 dmg (6 mitigated), got: ", contact_res)
 		quit(1)
 		return true
-	print("PASS [11/44]: Constitution Armor mitigation verified -> ", contact_res.get("message", ""))
+	print("PASS [11/46]: Constitution Armor mitigation verified -> ", contact_res.get("message", ""))
 
 	# 12. Verify Wave Survival Mode AI Pursuit & Wave Clear Progression (Wave 1 -> Wave 2)
 	arena.toggle_wave_survival()
@@ -155,7 +159,7 @@ func _process(_delta: float) -> bool:
 		printerr("FAIL: Wave 1 clear did not advance to Wave 2 with scaled enemy HP.")
 		quit(1)
 		return true
-	print("PASS [12/44]: Wave Survival AI chase & Wave 1->2 progression verified (Wave Score: %d, Wave 2 Scout HP: %d)" % [arena.wave_score, int(arena.dummies[0]["max_hp"])])
+	print("PASS [12/46]: Wave Survival AI chase & Wave 1->2 progression verified (Wave Score: %d, Wave 2 Scout HP: %d)" % [arena.wave_score, int(arena.dummies[0]["max_hp"])])
 
 	# 13. Verify CommandCenterReceiver Direct RPC Command Execution
 	var rpc_res: Dictionary = udp_bridge.execute_remote_command("select_hero", {"slot": 2})
@@ -163,7 +167,7 @@ func _process(_delta: float) -> bool:
 		printerr("FAIL: CommandCenterReceiver select_hero RPC failed: ", rpc_res)
 		quit(1)
 		return true
-	print("PASS [13/44]: CommandCenterReceiver RPC verified -> ", rpc_res.get("note", ""))
+	print("PASS [13/46]: CommandCenterReceiver RPC verified -> ", rpc_res.get("note", ""))
 
 	# 14. Verify Live Loopback UDP Socket Round-Trip (PacketPeerUDP -> CommandCenterReceiver -> ACK)
 	var bound_port: int = udp_bridge.get_bound_port()
@@ -182,7 +186,7 @@ func _process(_delta: float) -> bool:
 		return true
 	var ack_text := test_sender.get_packet().get_string_from_utf8()
 	test_sender.close()
-	print("PASS [14/44]: Live UDP loopback datagram & ACK verified on port %d -> %s" % [bound_port, ack_text.substr(0, 75) + "..."])
+	print("PASS [14/46]: Live UDP loopback datagram & ACK verified on port %d -> %s" % [bound_port, ack_text.substr(0, 75) + "..."])
 
 	# 15. Verify Class Ultimate Ability ([Q] Key, -15 MP)
 	arena.player_pos = Vector2(760.0, 200.0)
@@ -191,7 +195,7 @@ func _process(_delta: float) -> bool:
 		printerr("FAIL: Ash-Knight Consecrated Ember Nova ultimate failed: ", ult_res)
 		quit(1)
 		return true
-	print("PASS [15/44]: Class Ultimate Ability verified -> ", ult_res.get("message", ""))
+	print("PASS [15/46]: Class Ultimate Ability verified -> ", ult_res.get("message", ""))
 
 	# 16. Verify Boss Wave Encounter on Wave 3 (Ashen Titan [BOSS] Spawn)
 	arena.apply_damage_to_dummy(0, 500)
@@ -201,7 +205,7 @@ func _process(_delta: float) -> bool:
 		printerr("FAIL: Clearing Wave 2 did not spawn Ashen Titan [BOSS] on Wave 3: ", arena.dummies)
 		quit(1)
 		return true
-	print("PASS [16/44]: Wave 3 Boss Encounter verified -> %s spawned (%d/%d HP)!" % [
+	print("PASS [16/46]: Wave 3 Boss Encounter verified -> %s spawned (%d/%d HP)!" % [
 		str(arena.dummies[3].get("name", "")),
 		int(arena.dummies[3].get("hp", 0)),
 		int(arena.dummies[3].get("max_hp", 0))
@@ -212,7 +216,7 @@ func _process(_delta: float) -> bool:
 		printerr("FAIL: Expected at least 2 Relic Chests spawned after clearing Waves 1 & 2, got: ", arena.loot_chests.size())
 		quit(1)
 		return true
-	print("PASS [17/44]: Wave Clear Relic Chest spawning verified (%d active chests on arena floor)." % arena.loot_chests.size())
+	print("PASS [17/46]: Wave Clear Relic Chest spawning verified (%d active chests on arena floor)." % arena.loot_chests.size())
 
 	# 18. Verify Looting Relic Chest Grants Inventory Item & Boosts Derived Combat Stats
 	var dmg_before_relic: int = arena.get_calculated_arrow_damage()
@@ -223,7 +227,7 @@ func _process(_delta: float) -> bool:
 		printerr("FAIL: Looting Relic Chest did not boost hero damage or inventory bonuses: ", loot_res)
 		quit(1)
 		return true
-	print("PASS [18/44]: Relic Chest loot & stat bonus verified (Dmg %d -> %d) -> %s" % [
+	print("PASS [18/46]: Relic Chest loot & stat bonus verified (Dmg %d -> %d) -> %s" % [
 		dmg_before_relic,
 		dmg_after_relic,
 		str(loot_res.get("message", ""))
@@ -236,7 +240,7 @@ func _process(_delta: float) -> bool:
 		printerr("FAIL: save_party_progression() did not persist 4 heroes and high_wave_score 900: ", save_res)
 		quit(1)
 		return true
-	print("PASS [19/44]: Save party progression verified -> ", save_res.get("message", ""))
+	print("PASS [19/46]: Save party progression verified -> ", save_res.get("message", ""))
 
 	# 20. Verify Reset & Load Party Progression Restores Level-Ups, Relics, Active Slot & Wave Records
 	loader.reset_all_progression()
@@ -255,14 +259,14 @@ func _process(_delta: float) -> bool:
 		quit(1)
 		return true
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(test_save_path))
-	print("PASS [20/44]: Load party progression verified (Ash-Knight Level 8 + Relic, Kaelen Level 7, Best Wave 3 / 900 pts restored).")
+	print("PASS [20/46]: Load party progression verified (Ash-Knight Level 8 + Relic, Kaelen Level 7, Best Wave 3 / 900 pts restored).")
 
 	# 21. Verify ProceduralSfx Waveform Synthesis & Combat Cue Accounting
 	if sfx.total_sfx_played < 8 or not sfx.cue_counts.has("shoot") or not sfx.cue_counts.has("ultimate") or not sfx.cue_counts.has("relic_loot") or not sfx.cue_counts.has("boss_spawn"):
 		printerr("FAIL: ProceduralSfx did not synthesize all expected combat cues: ", sfx.cue_counts)
 		quit(1)
 		return true
-	print("PASS [21/44]: ProceduralSfx waveform synthesis verified (%d cues played: %s, last samples=%d)." % [
+	print("PASS [21/46]: ProceduralSfx waveform synthesis verified (%d cues played: %s, last samples=%d)." % [
 		sfx.total_sfx_played,
 		JSON.stringify(sfx.cue_counts),
 		sfx.last_samples_generated
@@ -277,7 +281,7 @@ func _process(_delta: float) -> bool:
 		printerr("FAIL: ProceduralSfx mute/unmute toggle failed: ", muted_play, " / ", unmuted_play)
 		quit(1)
 		return true
-	print("PASS [22/44]: ProceduralSfx mute toggle [M] verified (Muted samples=0 -> Unmuted 'level_up' samples=%d)." % [
+	print("PASS [22/46]: ProceduralSfx mute toggle [M] verified (Muted samples=0 -> Unmuted 'level_up' samples=%d)." % [
 		int(unmuted_play.get("samples_generated", 0))
 	])
 
@@ -291,7 +295,7 @@ func _process(_delta: float) -> bool:
 		printerr("FAIL: trigger_use_potion() did not restore +25 HP or decrement quantity to 1: ", pot_res_1)
 		quit(1)
 		return true
-	print("PASS [23/44]: Consumable Potion [C] verified -> ", pot_res_1.get("message", ""))
+	print("PASS [23/46]: Consumable Potion [C] verified -> ", pot_res_1.get("message", ""))
 
 	# 24. Verify Zero-Quantity Cleanup, Empty Potion Error Boundary & Boss Potion Restock
 	var pot_res_2: Dictionary = arena.trigger_use_potion()
@@ -301,7 +305,7 @@ func _process(_delta: float) -> bool:
 		printerr("FAIL: Potion zero-quantity cleanup, empty error boundary, or restock failed: ", pot_empty_res, " / ", restock_res)
 		quit(1)
 		return true
-	print("PASS [24/44]: Potion zero-quantity cleanup, empty boundary check & Boss restock verified (%s)." % str(restock_res.get("message", "")))
+	print("PASS [24/46]: Potion zero-quantity cleanup, empty boundary check & Boss restock verified (%s)." % str(restock_res.get("message", "")))
 
 	# 25. Verify Tactical Obsidian Pillars, Circle Collision Resolution & Line-of-Sight Cover
 	var los_blocked: bool = not arena.has_line_of_sight(Vector2(380.0, 220.0), Vector2(560.0, 220.0))
@@ -312,7 +316,7 @@ func _process(_delta: float) -> bool:
 		printerr("FAIL: Obsidian Pillar LoS cover or circle collision resolution failed: ", col_test)
 		quit(1)
 		return true
-	print("PASS [25/44]: Obsidian Pillars (4), circle collision push-out & Line-of-Sight cover verified (Blocked LoS=%s, Clear Corridor=%s)." % [
+	print("PASS [25/46]: Obsidian Pillars (4), circle collision push-out & Line-of-Sight cover verified (Blocked LoS=%s, Clear Corridor=%s)." % [
 		str(los_blocked),
 		str(los_clear)
 	])
@@ -326,7 +330,7 @@ func _process(_delta: float) -> bool:
 		printerr("FAIL: Projectile aimed into Obsidian Pillar NW was not blocked: blocked=", blocked_arrows, " remaining=", arena.arrows.size())
 		quit(1)
 		return true
-	print("PASS [26/44]: Projectile cover interception verified (Blocked by Obsidian Pillar NW, total blocks=%d)." % arena.obstacle_blocks_count)
+	print("PASS [26/46]: Projectile cover interception verified (Blocked by Obsidian Pillar NW, total blocks=%d)." % arena.obstacle_blocks_count)
 
 	# 27. Verify Dexterity/Wisdom Critical Hit System (2x Damage & force_crit RPC)
 	var crit_chance: float = arena.get_calculated_crit_chance()
@@ -336,7 +340,7 @@ func _process(_delta: float) -> bool:
 		printerr("FAIL: Critical Hit 2x damage or crit_chance scaling failed: ", crit_hit_res, " chance=", crit_chance)
 		quit(1)
 		return true
-	print("PASS [27/44]: Critical Hit 2x multiplier & Dex/Wis Crit Chance (%d%%) verified -> %s" % [
+	print("PASS [27/46]: Critical Hit 2x multiplier & Dex/Wis Crit Chance (%d%%) verified -> %s" % [
 		int(round(crit_chance * 100.0)),
 		str(crit_hit_res.get("message", ""))
 	])
@@ -352,7 +356,7 @@ func _process(_delta: float) -> bool:
 		printerr("FAIL: Floating Combat Text popup lifecycle failed: count_before=", ft_count_before, " text=", last_popup.get("text", ""))
 		quit(1)
 		return true
-	print("PASS [28/44]: Floating Combat Text popups verified (%d total spawned, 'CRIT -32!' rose & faded cleanly)." % arena.total_floating_texts_spawned)
+	print("PASS [28/46]: Floating Combat Text popups verified (%d total spawned, 'CRIT -32!' rose & faded cleanly)." % arena.total_floating_texts_spawned)
 
 	# 29. Verify Enemy Ranged Projectiles, Boss 3-Bolt Fireball Volley & Obsidian Pillar Cover Interception
 	arena.enemy_projectiles.clear()
@@ -366,7 +370,7 @@ func _process(_delta: float) -> bool:
 		printerr("FAIL: Boss 3-bolt Fireball Volley or enemy projectile cover block failed: ", boss_volley_res, " / ", step_ep_res)
 		quit(1)
 		return true
-	print("PASS [29/44]: Boss 3-Bolt Fireball Volley & Obsidian Pillar enemy bolt interception verified (Boss bolts=%d, Cover blocks=%d)." % [
+	print("PASS [29/46]: Boss 3-Bolt Fireball Volley & Obsidian Pillar enemy bolt interception verified (Boss bolts=%d, Cover blocks=%d)." % [
 		boss_bolts_count,
 		arena.enemy_projectiles_blocked_by_cover
 	])
@@ -384,7 +388,7 @@ func _process(_delta: float) -> bool:
 		printerr("FAIL: Enemy projectile Mana Dash dodge or armor-mitigated hit failed: ", dodge_step_res, " / ", direct_hit_res)
 		quit(1)
 		return true
-	print("PASS [30/44]: Enemy projectile Mana Dash dodge ('DODGED!') & armor-mitigated hit verified -> %s" % str(direct_hit_res.get("message", "")))
+	print("PASS [30/46]: Enemy projectile Mana Dash dodge ('DODGED!') & armor-mitigated hit verified -> %s" % str(direct_hit_res.get("message", "")))
 
 	# 31. Verify Arcane Parry & Projectile Deflection ([F] Key / trigger_arcane_parry)
 	arena.enemy_projectiles.clear()
@@ -398,7 +402,7 @@ func _process(_delta: float) -> bool:
 		printerr("FAIL: Arcane Parry did not deflect incoming Cinder Bolt into supercharged player arrow: ", parry_res)
 		quit(1)
 		return true
-	print("PASS [31/44]: Arcane Parry [F] deflection verified -> %s" % str(parry_res.get("message", "")))
+	print("PASS [31/46]: Arcane Parry [F] deflection verified -> %s" % str(parry_res.get("message", "")))
 
 	# 32. Verify Environmental Hazard Zones (Molten Cinder Pit Burn DoT & Sanctuary Shrine Regen)
 	arena.dummies[0]["alive"] = true
@@ -411,7 +415,7 @@ func _process(_delta: float) -> bool:
 		printerr("FAIL: Environmental Hazard / Sanctuary Shrine tick failed: ", haz_res, " dummy_hp=", arena.dummies[0]["hp"])
 		quit(1)
 		return true
-	print("PASS [32/44]: Environmental Hazard & Sanctuary Zones verified (Molten Burn -8 HP on enemy, Sanctuary +2 HP/+3 MP on hero).")
+	print("PASS [32/46]: Environmental Hazard & Sanctuary Zones verified (Molten Burn -8 HP on enemy, Sanctuary +2 HP/+3 MP on hero).")
 
 	# 33. Verify Combo Kill-Streak & Frenzy Multiplier System (+15% Speed, +10% Crit, 2x/3x Multiplier)
 	arena.combo_count = 0
@@ -426,7 +430,7 @@ func _process(_delta: float) -> bool:
 		printerr("FAIL: Combo Frenzy Mode did not activate 2x multiplier, +15% haste, and +10% crit: ", frenzy_res)
 		quit(1)
 		return true
-	print("PASS [33/44]: Combo Kill-Streak & Frenzy Mode verified (Combo=%d, Multiplier=%dx, Speed %d->%d px/s, Crit %d%%->%d%%)." % [
+	print("PASS [33/46]: Combo Kill-Streak & Frenzy Mode verified (Combo=%d, Multiplier=%dx, Speed %d->%d px/s, Crit %d%%->%d%%)." % [
 		arena.combo_count,
 		arena.get_combo_multiplier(),
 		int(base_spd_pre_frenzy),
@@ -450,7 +454,7 @@ func _process(_delta: float) -> bool:
 		printerr("FAIL: Tactical AI Auto-Pilot did not execute emergency potion, reflex parry, and aimed fire: ", ai_step_1)
 		quit(1)
 		return true
-	print("PASS [34/44]: Tactical Utility AI Auto-Pilot [P] multi-action evaluation verified (Actions=%s, Total AI decisions=%d)." % [
+	print("PASS [34/46]: Tactical Utility AI Auto-Pilot [P] multi-action evaluation verified (Actions=%s, Total AI decisions=%d)." % [
 		JSON.stringify(actions_1),
 		arena.ai_decisions_count
 	])
@@ -467,14 +471,14 @@ func _process(_delta: float) -> bool:
 		printerr("FAIL: Tactical AI Auto-Pilot did not trigger evade_dash when enemy closed within danger radius: ", ai_step_2)
 		quit(1)
 		return true
-	print("PASS [35/44]: Tactical Utility AI danger-zone Mana Dash evasion ('evade_dash') verified (New pos=%s)." % str(arena.player_pos))
+	print("PASS [35/46]: Tactical Utility AI danger-zone Mana Dash evasion ('evade_dash') verified (New pos=%s)." % str(arena.player_pos))
 
 	# 36. Verify Dark-Fantasy Pixel-Art Sprite Generator, PNG Disk Export & HUD Hero Portrait
 	if arena.sprite_gen == null or arena.sprite_gen.textures.size() < 23 or arena.sprite_gen.png_files_written < 23 or hud.hero_portrait == null or hud.hero_portrait.texture == null:
 		printerr("FAIL: SpriteArtGenerator did not generate 23 pixel-art textures, write .png files, or bind HUD HeroPortrait: textures=", arena.sprite_gen.textures.size() if arena.sprite_gen else 0)
 		quit(1)
 		return true
-	print("PASS [36/44]: Dark-Fantasy Pixel-Art Sprite Generator verified (%d Nearest-Neighbor textures, %d .png sprites written to res://assets/sprites/, HUD HeroPortrait bound)." % [
+	print("PASS [36/46]: Dark-Fantasy Pixel-Art Sprite Generator verified (%d Nearest-Neighbor textures, %d .png sprites written to res://assets/sprites/, HUD HeroPortrait bound)." % [
 		arena.sprite_gen.textures.size(),
 		arena.sprite_gen.png_files_written
 	])
@@ -493,7 +497,7 @@ func _process(_delta: float) -> bool:
 		printerr("FAIL: Pixel-Spark Particle Burst or Camera Screen-Shake lifecycle failed: before=", active_parts_before, " trauma=", trauma_after_step)
 		quit(1)
 		return true
-	print("PASS [37/44]: Pixel-Spark Particle Burst & Camera Screen-Shake verified (%d total particles spawned, trauma=%.2f)." % [
+	print("PASS [37/46]: Pixel-Spark Particle Burst & Camera Screen-Shake verified (%d total particles spawned, trauma=%.2f)." % [
 		arena.total_particles_spawned,
 		trauma_after_step
 	])
@@ -505,7 +509,7 @@ func _process(_delta: float) -> bool:
 		printerr("FAIL: Entering South Dungeon Door did not transition to Gilded Relic Vault (0,1) with 2 chests: ", vault_res)
 		quit(1)
 		return true
-	print("PASS [38/44]: Procedural Dungeon Door ('S') -> Gilded Relic Vault (0,1) verified (2 Vault Chests spawned, Rooms Explored: %d/5)." % arena.rooms_explored_count)
+	print("PASS [38/46]: Procedural Dungeon Door ('S') -> Gilded Relic Vault (0,1) verified (2 Vault Chests spawned, Rooms Explored: %d/5)." % arena.rooms_explored_count)
 
 	# 39. Verify Consecrated Sanctuary Restock & Boss Throne Room Transition via UDP RPC ("enter_door")
 	arena.enter_dungeon_door("N", true)
@@ -519,7 +523,7 @@ func _process(_delta: float) -> bool:
 		printerr("FAIL: Sanctuary restock or Boss Throne Room (1,0) transition failed: sanc=", sanc_res, " throne=", throne_snap)
 		quit(1)
 		return true
-	print("PASS [39/44]: Sanctuary Chamber (+1 Elixir) & Boss Throne Room (1,0) verified -> %s (Rooms Explored: %d/5, Transitions: %d)." % [
+	print("PASS [39/46]: Sanctuary Chamber (+1 Elixir) & Boss Throne Room (1,0) verified -> %s (Rooms Explored: %d/5, Transitions: %d)." % [
 		str(throne_snap.get("current_room_name", "")),
 		int(throne_snap.get("rooms_explored_count", 0)),
 		int(throne_snap.get("total_door_transitions", 0))
@@ -534,7 +538,7 @@ func _process(_delta: float) -> bool:
 		printerr("FAIL: Boss Phase 2 Molten Enrage did not summon 2 Cinder Imps, boost speed, or fire 5-bolt nova: ", enrage_hit_res, " dummies=", arena.dummies.size())
 		quit(1)
 		return true
-	print("PASS [40/44]: Boss Phase 2 Molten Enrage verified -> %s" % str(enrage_hit_res.get("message", "")))
+	print("PASS [40/46]: Boss Phase 2 Molten Enrage verified -> %s" % str(enrage_hit_res.get("message", "")))
 
 	# 41. Verify Enraged Boss 5-Bolt Radial Fireball Nova Volley (is_enraged_nova = true, 5 bolts)
 	arena.enemy_projectiles.clear()
@@ -543,7 +547,7 @@ func _process(_delta: float) -> bool:
 		printerr("FAIL: Enraged Boss did not fire 5-bolt Radial Fireball Nova at 16 dmg/bolt: ", nova_volley)
 		quit(1)
 		return true
-	print("PASS [41/44]: Enraged Boss 5-Bolt Radial Fireball Nova verified (Bolts=%d, Dmg/Bolt=%d, Enraged Nova=%s)." % [
+	print("PASS [41/46]: Enraged Boss 5-Bolt Radial Fireball Nova verified (Bolts=%d, Dmg/Bolt=%d, Enraged Nova=%s)." % [
 		int(nova_volley.get("bolts_spawned", 0)),
 		int(nova_volley.get("damage_per_bolt", 0)),
 		str(nova_volley.get("is_enraged_nova", false))
@@ -565,7 +569,7 @@ func _process(_delta: float) -> bool:
 		printerr("FAIL: Frostbite chill or Cinderbrand burn DoT failed: frost=", frost_timer_applied, " burn_step=", burn_step_res)
 		quit(1)
 		return true
-	print("PASS [42/44]: Frostbite (-35%% speed chill) & Cinderbrand stacking Burn DoT verified (Chilled hits=%d, Burn ticks=%d, Enemy HP %d->%d)." % [
+	print("PASS [42/46]: Frostbite (-35%% speed chill) & Cinderbrand stacking Burn DoT verified (Chilled hits=%d, Burn ticks=%d, Enemy HP %d->%d)." % [
 		arena.total_chilled_hits,
 		arena.total_elemental_burn_ticks,
 		hp_before_burn,
@@ -587,21 +591,52 @@ func _process(_delta: float) -> bool:
 		printerr("FAIL: Stormchain did not arc 50% chain-lightning damage (10 dmg) to secondary target: ", storm_res)
 		quit(1)
 		return true
-	print("PASS [43/44]: Stormchain Lightning Arc verified (Primary hit=20 dmg -> Chained 10 dmg to %s, Active lightning arcs=%d)." % [
+	print("PASS [43/46]: Stormchain Lightning Arc verified (Primary hit=20 dmg -> Chained 10 dmg to %s, Active lightning arcs=%d)." % [
 		str(arena.dummies[1].get("name", "Target")),
 		arena.lightning_arcs.size()
 	])
 
-	# 44. Verify Failure Mode / Missing File Boundary Error Banner
+	# 44. Verify Gold Coin Drop Economy & Magnetized Coin Pickup
+	arena.coin_drops.clear()
+	var gold_before_pickup: int = arena.gold_coins
+	arena.spawn_coin_drop(arena.player_pos + Vector2(45.0, 0.0), 25, false)
+	var collected_gold: int = arena.step_coin_drops(0.20)
+	if gold_before_pickup < 100 or collected_gold != 25 or arena.gold_coins != gold_before_pickup + 25:
+		printerr("FAIL: Gold Coin Drop or magnetized pickup failed: before=", gold_before_pickup, " collected=", collected_gold, " total=", arena.gold_coins)
+		quit(1)
+		return true
+	print("PASS [44/46]: Gold Coin Drop & magnetized pickup verified (+%dg magnetized -> Total Gold: %dg, Total Earned: %dg)." % [
+		collected_gold,
+		arena.gold_coins,
+		arena.total_gold_earned
+	])
+
+	# 45. Verify Dungeon Merchant NPC Shop Upgrades ([B] Key / buy_upgrade RPC: Whetstone +3 Dmg, Armor +15 Max HP & Insufficient Gold Boundary)
+	var dmg_pre_shop: int = arena.get_calculated_arrow_damage()
+	var buy_whetstone: Dictionary = arena.buy_merchant_upgrade("whetstone")
+	var dmg_post_shop: int = arena.get_calculated_arrow_damage()
+	var buy_armor_rpc: Dictionary = udp_bridge.execute_remote_command("buy_upgrade", {"item_key": "armor"})
+	arena.gold_coins = 10
+	var broke_res: Dictionary = arena.buy_merchant_upgrade("whetstone")
+	if buy_whetstone.get("status") != "purchased" or dmg_post_shop != dmg_pre_shop + 3 or arena.shop_bonus_max_hp != 15 or arena.shop_purchases_count != 2 or not broke_res.has("error"):
+		printerr("FAIL: Dungeon Merchant shop upgrade or insufficient-gold boundary check failed: ", buy_whetstone, " / ", buy_armor_rpc, " / ", broke_res)
+		quit(1)
+		return true
+	print("PASS [45/46]: Dungeon Merchant NPC Shop [B] verified (Whetstone Dmg %d->%d, Armor +15 Max HP, Insufficient-gold boundary verified)." % [
+		dmg_pre_shop,
+		dmg_post_shop
+	])
+
+	# 46. Verify Failure Mode / Missing File Boundary Error Banner
 	hud.toggle_arena_mode()
 	var missing_res: Dictionary = loader.load_character_data("res://data/NonExistentChaosFile.json")
 	if not missing_res.is_empty() or not hud.error_banner.visible:
 		printerr("FAIL: Missing file error banner did not trigger.")
 		quit(1)
 		return true
-	print("PASS [44/44]: Missing-file error state verified -> ", hud.error_banner.text)
+	print("PASS [46/46]: Missing-file error state verified -> ", hud.error_banner.text)
 
-	print("=== ALL 44 HEADLESS HUD, ARENA, ROSTER, ULTIMATES, BOSS, RELICS, SFX, POTIONS, PILLARS, CRITS, ENEMY BOLTS, PARRY, HAZARDS, FRENZY, AI PILOT, PIXEL-ART SPRITES, DUNGEON CRAWLER, BOSS ENRAGE, ELEMENTAL INFUSIONS, UDP & SAVE/LOAD TESTS PASSED ===")
+	print("=== ALL 46 HEADLESS HUD, ARENA, ROSTER, ULTIMATES, BOSS, RELICS, SFX, POTIONS, PILLARS, CRITS, ENEMY BOLTS, PARRY, HAZARDS, FRENZY, AI PILOT, PIXEL-ART SPRITES, DUNGEON CRAWLER, BOSS ENRAGE, ELEMENTAL INFUSIONS, MERCHANT SHOP, UDP & SAVE/LOAD TESTS PASSED ===")
 	_main_instance.queue_free()
 	quit(0)
 	return true

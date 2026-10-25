@@ -49,6 +49,8 @@ func build_all_sprites(save_to_disk: bool = true) -> void:
 	_register_pattern("prop_chest", _PROP_CHEST, _PALETTE_CHEST, save_to_disk)
 	_register_pattern("prop_door_open", _PROP_DOOR_OPEN, _PALETTE_DOOR, save_to_disk)
 	_register_pattern("prop_door_locked", _PROP_DOOR_LOCKED, _PALETTE_DOOR, save_to_disk)
+	_register_pattern("npc_merchant", _NPC_MERCHANT, _PALETTE_MERCHANT, save_to_disk)
+	_register_pattern("prop_coin", _PROP_COIN, _PALETTE_MERCHANT, save_to_disk)
 	_register_pattern("weapon_bow", _WEAPON_BOW, _PALETTE_WEAPON, save_to_disk)
 	_register_pattern("weapon_sword", _WEAPON_SWORD, _PALETTE_WEAPON, save_to_disk)
 	_register_pattern("weapon_dagger", _WEAPON_DAGGER, _PALETTE_WEAPON, save_to_disk)
@@ -637,4 +639,44 @@ const _PROP_DOOR_LOCKED: Array[String] = [
 	"OSSDRODRORODSSOO",
 	"OSSDRODRORODSSOO",
 	"OOOOOOOOOOOOOOOO"
+]
+
+const _PALETTE_MERCHANT := {
+	"O": Color(0.06, 0.05, 0.08),
+	"R": Color(0.45, 0.22, 0.58),
+	"D": Color(0.28, 0.14, 0.38),
+	"G": Color(0.98, 0.82, 0.24),
+	"Y": Color(1.00, 0.96, 0.62),
+	"C": Color(0.42, 0.98, 0.88),
+	"W": Color(0.58, 0.36, 0.18),
+}
+
+const _NPC_MERCHANT: Array[String] = [
+	".....OOOOOO.....",
+	"....ORRRRRRO....",
+	"...ORRRRRRRRO...",
+	"...ORDOOOODRO...",
+	"...ORDYOOYDRO...",
+	"...ORDDDDDDRO...",
+	"..OOGGRRRRGGOWO.",
+	".ORRRRRRRRRROWYO",
+	".ORRGGRRRRGGOWYO",
+	".ORRRRRRRRRROOO.",
+	"..ODRRRRRRRRDO..",
+	"..ODDDDDDDDDDO..",
+	"...OOWW..WWOO...",
+	"...OOWW..WWOO...",
+	"...OOOO..OOOO...",
+	"................"
+]
+
+const _PROP_COIN: Array[String] = [
+	"..OOOO..",
+	".OGYYGO.",
+	"OGYGGYGO",
+	"OGYGGYGO",
+	"OGGGGGGO",
+	".OGGGGO.",
+	"..OOOO..",
+	"........"
 ]
