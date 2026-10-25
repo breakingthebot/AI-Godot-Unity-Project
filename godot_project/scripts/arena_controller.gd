@@ -63,6 +63,13 @@ const DOOR_TRIGGER_RADIUS: float = 42.0
 const DOOR_COOLDOWN_DURATION: float = 0.85
 const BOSS_ENRAGE_HP_THRESHOLD: float = 0.50
 const BOSS_ENRAGE_SPEED_MULTIPLIER: float = 1.30
+const ELEMENTAL_STANCES: Array[String] = ["none", "frostbite", "cinderbrand", "stormchain"]
+const FROST_DURATION: float = 3.5
+const FROST_SLOW_MULTIPLIER: float = 0.65
+const CINDER_DURATION: float = 3.0
+const CINDER_BURN_DAMAGE_PER_STACK: int = 5
+const STORMCHAIN_RANGE: float = 340.0
+const STORMCHAIN_RATIO: float = 0.50
 
 var loader: Node = null
 var sfx_node: Node = null
@@ -120,12 +127,19 @@ var total_door_transitions: int = 0
 var door_cooldown_timer: float = 0.0
 var total_boss_enrages: int = 0
 var total_cinder_imps_summoned: int = 0
+var elemental_stance: String = "none"
+var lightning_arcs: Array[Dictionary] = []
+var _elemental_burn_accum: float = 0.0
+var total_chilled_hits: int = 0
+var total_elemental_burn_ticks: int = 0
+var total_stormchain_arcs: int = 0
 
 var _ui_layer: CanvasLayer
 var _status_label: Label
 var _combat_banner: Label
 var _wave_btn: Button
 var _ai_btn: Button
+var _stance_btn: Button
 var _sfx_btn: Button
 
 
@@ -890,6 +904,161 @@ func is_boss_wave() -> bool:
 	return wave_number > 0 and wave_number % 3 == 0
 
 
+## Cycles or sets the active Elemental Weapon Infusion Stance ([V] Key: "none" -> "frostbite" -> "cinderbrand" -> "stormchain").
+func cycle_elemental_stance(target_stance: String = "") -> Dictionary:
+	var req := target_stance.strip_edges().to_lower()
+	if not req.is_empty() and ELEMENTAL_STANCES.has(req):
+		elemental_stance = req
+	else:
+		var idx: int = ELEMENTAL_STANCES.find(elemental_stance)
+		elemental_stance = ELEMENTAL_STANCES[(idx + 1) % ELEMENTAL_STANCES.size()]
+
+	if _stance_btn != null:
+		_stance_btn.text = "Infusion: %s [V]" % elemental_stance.to_upper()
+
+	var stance_col := get_elemental_stance_color()
+	spawn_particle_burst(player_pos, stance_col, 14, 1.15)
+	spawn_floating_text(player_pos + Vector2(0, -22), "INFUSION: %s" % elemental_stance.to_upper(), stance_col, true)
+	_play_sfx("relic_loot")
+
+	var desc := "Physical (No Infusion)"
+	match elemental_stance:
+		"frostbite":
+			desc = "Frostbite (-35% Enemy Speed for 3.5s)"
+		"cinderbrand":
+			desc = "Cinderbrand (Stacking +5 Burn DoT every 0.5s)"
+		"stormchain":
+			desc = "Stormchain (Arcs 50% Chain-Lightning Dmg to Nearby Enemy)"
+
+	var msg := "[Elemental Infusion -> %s] Active weapon imbued with %s!" % [
+		elemental_stance.to_upper(),
+		desc
+	]
+	if _combat_banner != null:
+		_combat_banner.text = msg
+	arena_combat_event.emit(msg)
+	_refresh_status_bar()
+	queue_redraw()
+	return {
+		"status": "stance_changed",
+		"elemental_stance": elemental_stance,
+		"description": desc,
+		"message": msg
+	}
+
+
+func get_elemental_stance_color() -> Color:
+	match elemental_stance:
+		"frostbite":
+			return Color(0.38, 0.90, 1.0)
+		"cinderbrand":
+			return Color(1.0, 0.48, 0.14)
+		"stormchain":
+			return Color(0.55, 0.95, 1.0)
+		_:
+			return Color(0.85, 0.90, 0.96)
+
+
+## Applies the active Elemental Weapon Infusion effect ("frostbite", "cinderbrand", or "stormchain") to a struck enemy.
+func apply_elemental_infusion_on_hit(dummy_index: int, hit_damage: int, allow_chain: bool = true) -> Dictionary:
+	if elemental_stance == "none" or dummy_index < 0 or dummy_index >= dummies.size():
+		return {"effect": "none"}
+
+	var d: Dictionary = dummies[dummy_index]
+	var d_pos: Vector2 = d.get("pos", Vector2.ZERO)
+
+	if elemental_stance == "frostbite":
+		if bool(d.get("alive", true)):
+			d["frost_timer"] = FROST_DURATION
+			dummies[dummy_index] = d
+		total_chilled_hits += 1
+		spawn_particle_burst(d_pos, Color(0.38, 0.92, 1.0), 12, 1.1)
+		spawn_floating_text(d_pos + Vector2(0, -16), "CHILLED -35%!", Color(0.45, 0.94, 1.0), false)
+		return {"effect": "frostbite", "frost_timer": FROST_DURATION, "slow_multiplier": FROST_SLOW_MULTIPLIER}
+
+	elif elemental_stance == "cinderbrand":
+		if bool(d.get("alive", true)):
+			d["burn_timer"] = CINDER_DURATION
+			d["burn_stacks"] = mini(3, int(d.get("burn_stacks", 0)) + 1)
+			dummies[dummy_index] = d
+		spawn_particle_burst(d_pos, Color(1.0, 0.45, 0.12), 12, 1.1)
+		spawn_floating_text(d_pos + Vector2(0, -16), "IGNITED x%d!" % int(d.get("burn_stacks", 1)), Color(1.0, 0.58, 0.18), false)
+		return {"effect": "cinderbrand", "burn_stacks": int(d.get("burn_stacks", 1))}
+
+	elif elemental_stance == "stormchain" and allow_chain:
+		var best_idx: int = -1
+		var best_dist: float = STORMCHAIN_RANGE
+		for i in range(dummies.size()):
+			if i == dummy_index or not bool(dummies[i].get("alive", true)):
+				continue
+			var dist := d_pos.distance_to(dummies[i].get("pos", Vector2.ZERO))
+			if dist <= best_dist:
+				best_dist = dist
+				best_idx = i
+		if best_idx >= 0:
+			var chain_dmg: int = maxi(4, int(round(float(hit_damage) * STORMCHAIN_RATIO)))
+			var target_pos: Vector2 = dummies[best_idx].get("pos", Vector2.ZERO)
+			lightning_arcs.append({
+				"from": d_pos,
+				"to": target_pos,
+				"ttl": 0.28,
+				"max_ttl": 0.28
+			})
+			total_stormchain_arcs += 1
+			spawn_particle_burst(target_pos, Color(0.52, 0.96, 1.0), 14, 1.3)
+			spawn_floating_text(target_pos + Vector2(0, -18), "CHAIN -%d!" % chain_dmg, Color(0.55, 0.96, 1.0), true)
+			apply_damage_to_dummy(best_idx, chain_dmg, false, false)
+			return {"effect": "stormchain", "chained_to_index": best_idx, "chain_damage": chain_dmg}
+
+	return {"effect": elemental_stance}
+
+
+## Steps active elemental debuffs (Frostbite chill decay, Cinderbrand burn DoT ticks, and Stormchain lightning arc TTLs).
+func step_elemental_statuses(delta: float) -> Dictionary:
+	var remaining_arcs: Array[Dictionary] = []
+	for arc in lightning_arcs:
+		arc["ttl"] = float(arc.get("ttl", 0.0)) - delta
+		if float(arc["ttl"]) > 0.0:
+			remaining_arcs.append(arc)
+	lightning_arcs = remaining_arcs
+
+	for i in range(dummies.size()):
+		if not bool(dummies[i].get("alive", true)):
+			continue
+		var ft: float = float(dummies[i].get("frost_timer", 0.0))
+		if ft > 0.0:
+			dummies[i]["frost_timer"] = maxf(0.0, ft - delta)
+		var bt: float = float(dummies[i].get("burn_timer", 0.0))
+		if bt > 0.0:
+			dummies[i]["burn_timer"] = maxf(0.0, bt - delta)
+			if float(dummies[i]["burn_timer"]) <= 0.0:
+				dummies[i]["burn_stacks"] = 0
+
+	_elemental_burn_accum += delta
+	var burn_ticks_applied: int = 0
+	var total_burn_dmg: int = 0
+	if _elemental_burn_accum >= 0.5:
+		_elemental_burn_accum -= 0.5
+		for i in range(dummies.size()):
+			if not bool(dummies[i].get("alive", true)):
+				continue
+			var stacks: int = int(dummies[i].get("burn_stacks", 0))
+			if float(dummies[i].get("burn_timer", 0.0)) > 0.0 and stacks > 0:
+				var b_dmg: int = stacks * CINDER_BURN_DAMAGE_PER_STACK
+				var d_pos: Vector2 = dummies[i].get("pos", Vector2.ZERO)
+				total_elemental_burn_ticks += 1
+				burn_ticks_applied += 1
+				total_burn_dmg += b_dmg
+				spawn_floating_text(d_pos, "-%d [CINDER x%d]" % [b_dmg, stacks], Color(1.0, 0.52, 0.16), false)
+				apply_damage_to_dummy(i, b_dmg, false, false)
+
+	return {
+		"burn_ticks_applied": burn_ticks_applied,
+		"total_burn_damage": total_burn_dmg,
+		"active_lightning_arcs": lightning_arcs.size()
+	}
+
+
 func _build_arena_overlay() -> void:
 	_ui_layer = CanvasLayer.new()
 	_ui_layer.name = "ArenaOverlay"
@@ -938,6 +1107,12 @@ func _build_arena_overlay() -> void:
 	_ai_btn.text = "AI Pilot: OFF [P]"
 	_ai_btn.pressed.connect(toggle_ai_pilot)
 	hbox.add_child(_ai_btn)
+
+	_stance_btn = Button.new()
+	_stance_btn.name = "ElementalStanceButton"
+	_stance_btn.text = "Infusion: NONE [V]"
+	_stance_btn.pressed.connect(func() -> void: cycle_elemental_stance())
+	hbox.add_child(_stance_btn)
 
 	var dash_btn := Button.new()
 	dash_btn.name = "ManaDashButton"
@@ -1748,7 +1923,7 @@ func fire_arrow_at(target_world_pos: Vector2, allow_random_crit: bool = false) -
 
 
 ## Applies damage to a target dummy by index (with Critical Hit 2x multiplier & Floating Combat Text) and handles Wave Survival progression.
-func apply_damage_to_dummy(dummy_index: int, damage: int, is_crit: bool = false) -> Dictionary:
+func apply_damage_to_dummy(dummy_index: int, damage: int, is_crit: bool = false, allow_elemental_proc: bool = true) -> Dictionary:
 	if dummy_index < 0 or dummy_index >= dummies.size():
 		return {"error": "Invalid dummy index"}
 
@@ -1849,6 +2024,10 @@ func apply_damage_to_dummy(dummy_index: int, damage: int, is_crit: bool = false)
 			if enrage_res.get("status") == "boss_enraged":
 				msg = str(enrage_res.get("message", msg))
 
+	var elem_res: Dictionary = {}
+	if allow_elemental_proc and elemental_stance != "none":
+		elem_res = apply_elemental_infusion_on_hit(dummy_index, final_damage, true)
+
 	if _combat_banner != null:
 		_combat_banner.text = msg
 	arena_combat_event.emit(msg)
@@ -1860,7 +2039,8 @@ func apply_damage_to_dummy(dummy_index: int, damage: int, is_crit: bool = false)
 		"dummy_name": dummy.get("name"),
 		"damage": final_damage,
 		"is_crit": crit_active,
-		"remaining_hp": dummy["hp"],
+		"elemental_proc": elem_res,
+		"remaining_hp": dummies[dummy_index]["hp"] if dummy_index < dummies.size() else 0,
 		"message": msg
 	}
 
@@ -1913,6 +2093,8 @@ func _unhandled_input(event: InputEvent) -> void:
 				toggle_ai_pilot()
 			elif ke.keycode == KEY_N:
 				enter_next_unexplored_room()
+			elif ke.keycode == KEY_V:
+				cycle_elemental_stance()
 
 
 func _process(delta: float) -> void:
@@ -1975,8 +2157,9 @@ func _process(delta: float) -> void:
 	if ai_pilot_active:
 		step_ai_pilot(delta)
 
-	# Step Environmental Hazard & Sanctuary Zones
+	# Step Environmental Hazard & Sanctuary Zones and Elemental Statuses
 	step_hazard_zones(delta)
+	step_elemental_statuses(delta)
 
 	# 2. Wave Survival Enemy AI Pursuit & Contact Check
 	if wave_survival_active:
@@ -2051,6 +2234,8 @@ func step_wave_enemies(delta: float) -> void:
 		var dist := to_player.length()
 		if dist > 1.0:
 			var spd: float = float(dummies[i].get("speed", BASE_ENEMY_CHASE_SPEED))
+			if float(dummies[i].get("frost_timer", 0.0)) > 0.0:
+				spd *= FROST_SLOW_MULTIPLIER
 			var dir: Vector2 = to_player / dist
 			var next_pos: Vector2 = d_pos + dir * spd * delta
 			var col_res := resolve_circle_obstacle_collision(next_pos, d_rad)
@@ -2232,7 +2417,8 @@ func _draw() -> void:
 	var wpn_pos: Vector2 = player_pos + aim_dir * 22.0
 	if wpn_tex != null:
 		var w_size := Vector2(24.0 if not flip_h else -24.0, 24.0)
-		draw_texture_rect(wpn_tex, Rect2(wpn_pos - Vector2(12.0, 12.0), w_size), false)
+		var w_mod := get_elemental_stance_color() if elemental_stance != "none" else Color.WHITE
+		draw_texture_rect(wpn_tex, Rect2(wpn_pos - Vector2(12.0, 12.0), w_size), false, w_mod)
 
 	# Dash Invulnerability Aura Ring
 	if dash_iframe_timer > 0.0:
@@ -2280,6 +2466,8 @@ func _draw() -> void:
 			draw_string(font, player_pos + Vector2(-48, -78), combo_tag, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(1.0, 0.85, 0.22) if is_frenzy_active() else Color(0.95, 0.78, 0.45))
 		if ai_pilot_active:
 			draw_string(font, player_pos + Vector2(-46, -92), "[AI AUTO-PILOT: %s]" % ai_last_action.to_upper(), HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.35, 0.98, 0.85))
+		if elemental_stance != "none":
+			draw_string(font, player_pos + Vector2(-48, -106), "[INFUSION: %s]" % elemental_stance.to_upper(), HORIZONTAL_ALIGNMENT_LEFT, -1, 11, get_elemental_stance_color())
 
 	# 6. Animated Pixel-Art Monsters & Towering Boss Sprites
 	for dummy in dummies:
@@ -2322,8 +2510,30 @@ func _draw() -> void:
 
 		if font != null:
 			var enrage_tag := " [PHASE 2: ENRAGED]" if is_enraged else ""
-			var label_str := "%s%s (%d/%d)" % [d_name, enrage_tag, int(dummy["hp"]), int(dummy["max_hp"])]
+			var status_tags := ""
+			if float(dummy.get("frost_timer", 0.0)) > 0.0:
+				status_tags += " [FROST]"
+				draw_arc(d_pos, d_rad + 4.0, 0.0, TAU, 24, Color(0.38, 0.92, 1.0, 0.85), 2.0)
+			if float(dummy.get("burn_timer", 0.0)) > 0.0 and int(dummy.get("burn_stacks", 0)) > 0:
+				status_tags += " [BURN x%d]" % int(dummy.get("burn_stacks", 1))
+				draw_arc(d_pos, d_rad + 6.0, 0.0, TAU, 24, Color(1.0, 0.48, 0.14, 0.85), 2.0)
+			var label_str := "%s%s%s (%d/%d)" % [d_name, enrage_tag, status_tags, int(dummy["hp"]), int(dummy["max_hp"])]
 			draw_string(font, d_pos + Vector2(-68, -d_rad - 26.0), label_str, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(1.0, 0.55, 0.38) if is_enraged else Color(0.98, 0.92, 0.78))
+
+	# 6B. Crackling Jagged Stormchain Lightning Arcs
+	for arc in lightning_arcs:
+		var p_from: Vector2 = arc.get("from", Vector2.ZERO)
+		var p_to: Vector2 = arc.get("to", Vector2.ZERO)
+		var seg := (p_to - p_from) * 0.25
+		var perp := Vector2(-seg.y, seg.x).normalized() * 12.0
+		var p1 := p_from + seg + perp
+		var p2 := p_from + seg * 2.0 - perp
+		var p3 := p_from + seg * 3.0 + perp * 0.7
+		var l_col := Color(0.48, 0.96, 1.0, 0.95)
+		draw_line(p_from, p1, l_col, 3.2)
+		draw_line(p1, p2, Color.WHITE, 2.6)
+		draw_line(p2, p3, l_col, 3.2)
+		draw_line(p3, p_to, Color.WHITE, 2.6)
 
 	# 7. Active Player Projectiles (Glowing Fletched Bolts / Daggers)
 	for arrow in arrows:

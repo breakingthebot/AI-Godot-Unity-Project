@@ -1,5 +1,9 @@
 # Changelog
 
+## [2.3.0] - 2026-10-25
+- Add Elemental Weapon Infusion Stance system (`cycle_elemental_stance()`, `apply_elemental_infusion_on_hit()`, `step_elemental_statuses()` via `[V]` key, `"Infusion: NONE [V]"` button, and `"cycle_stance"` UDP RPC) supporting **Frostbite** (`-35%` enemy chase speed for `3.5s`), **Cinderbrand** (stacking `+5` fire burn DoT every `0.5s`), and **Stormchain** (arcing `50%` chain-lightning damage to a nearby secondary enemy with crackling 4-segment lightning bolt visuals).
+- Expand headless Godot test suite to 44/44 assertions (`godot_project/tests/test_hud_headless.gd`).
+
 ## [2.2.0] - 2026-10-25
 - Add Boss Phase 2 Molten Enrage state machine (`check_and_trigger_boss_enrage()`, `_summon_cinder_imps()`, `is_boss_enraged()`, `"trigger_boss_enrage"` UDP RPC) triggered when `Ashen Titan [BOSS]` drops to `<= 50% HP`, boosting Boss chase speed by `+30%`, summoning 2 flanking `Cinder Imp [SUMMON]` minions (`32 HP`, `1.35x` speed), and upgrading Boss ranged attacks from a 3-bolt fan to a **5-Bolt Radial Fireball Nova** (`16` dmg/bolt, `1.15x` velocity).
 - Expand headless Godot test suite to 42/42 assertions (`godot_project/tests/test_hud_headless.gd`).

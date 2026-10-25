@@ -218,6 +218,11 @@ func execute_remote_command(command_name: String, payload: Dictionary = {}) -> D
 				var b_idx: int = int(payload.get("boss_index", -1))
 				var e_res: Dictionary = arena.check_and_trigger_boss_enrage(b_idx, true)
 				action_note = "Remote RPC triggered Boss Phase 2 Molten Enrage -> %s" % str(e_res.get("status", "ok"))
+		"cycle_stance":
+			if arena != null and arena.has_method("cycle_elemental_stance"):
+				var target_st: String = str(payload.get("stance", ""))
+				var st_res: Dictionary = arena.cycle_elemental_stance(target_st)
+				action_note = "Remote RPC cycled Elemental Infusion Stance -> %s" % str(st_res.get("elemental_stance", "none"))
 		"toggle_mute":
 			if sfx_node != null and sfx_node.has_method("toggle_mute"):
 				var muted_now: bool = sfx_node.toggle_mute()
@@ -305,6 +310,10 @@ func build_telemetry_snapshot() -> Dictionary:
 		"boss_enraged": bool(arena.is_boss_enraged()) if (arena != null and arena.has_method("is_boss_enraged")) else false,
 		"total_boss_enrages": int(arena.total_boss_enrages) if arena != null else 0,
 		"total_cinder_imps_summoned": int(arena.total_cinder_imps_summoned) if arena != null else 0,
+		"elemental_stance": str(arena.elemental_stance) if arena != null else "none",
+		"total_chilled_hits": int(arena.total_chilled_hits) if arena != null else 0,
+		"total_elemental_burn_ticks": int(arena.total_elemental_burn_ticks) if arena != null else 0,
+		"total_stormchain_arcs": int(arena.total_stormchain_arcs) if arena != null else 0,
 		"sfx_muted": bool(sfx_node.muted) if sfx_node != null else false,
 		"total_sfx_played": int(sfx_node.total_sfx_played) if sfx_node != null else 0,
 		"high_wave_reached": int(loader.high_wave_reached) if loader != null else 1,
