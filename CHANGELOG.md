@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.0.1] - 2026-10-25
+- Fix GUI formatting, right-edge text overflow, and map/HUD overlaps across `project.godot`, `arena_controller.gd`, and `character_sheet_hud.gd`:
+  - Configure `1280x720` HD viewport (`window/size/viewport_width=1280`, `window/size/viewport_height=720`, `canvas_items` stretch mode) in `godot_project/project.godot`.
+  - Split the 20 Arena controls into a compact **Top Status Header** (`y = 0..56`, ellipsis-clamped status/combat banners + 4 system buttons) and a **2-Row Bottom Action Dock** (`y = 636..720`, 8 compact buttons per row) so buttons never overflow off the right edge.
+  - Create a dedicated **`256 px` Right-Hand HUD Sidebar (`x = 1012..1268`)** completely outside the Arena floor (`ARENA_MAX_BOUNDS.x = 972.0`) housing the **Dungeon Minimap**, **Bounty Board Tracker**, **Combat Telemetry & DPS Meter**, and **Citadel Hotkeys Legend** with zero overlap over the map, Merchant, doors, or enemies.
+  - Clamp East/West/North/South door labels, Enemy/Boss overhead labels, and Character Sheet HUD header/inventory labels (`OVERRUN_TRIM_ELLIPSIS` & `AUTOWRAP_WORD_SMART`).
+
 ## [3.0.0] - 2026-10-25
 - Add Live In-Game Combat Telemetry & Rolling 5s DPS Meter Overlay (`record_combat_damage()`, `get_rolling_dps()`, `get_combat_telemetry_summary()`, `toggle_telemetry_overlay()`, `_draw_telemetry_overlay()` via **`[K]` key**, **`"DPS: OFF [K]"` button**, and `"toggle_telemetry_overlay"` / `"get_combat_telemetry"` UDP RPCs) displaying rolling 5s DPS with a live meter bar, Total Damage Dealt, Hits Landed, Max Single Hit, Observed Crit Rate %, Parries, Cover Blocks, Elemental Procs, Spirit Owl Bolts, Gold Earned, and AI Pilot ops.
 - Expand headless Godot test suite to 58/58 assertions (`godot_project/tests/test_hud_headless.gd`).

@@ -167,16 +167,45 @@ func _build_ui() -> void:
 	main_vbox.add_theme_constant_override("separation", 12)
 	margin.add_child(main_vbox)
 
-	# Roster Switcher Bar (Slots 1-4)
+	# Top Navigation Row: Roster Switcher (Slots 1-4) on Left + Save/Load/Reset on Right
+	var top_nav_hbox := HBoxContainer.new()
+	top_nav_hbox.name = "TopNavHBox"
+	top_nav_hbox.add_theme_constant_override("separation", 10)
+	main_vbox.add_child(top_nav_hbox)
+
 	roster_bar = HBoxContainer.new()
 	roster_bar.name = "RosterBar"
-	roster_bar.add_theme_constant_override("separation", 10)
-	main_vbox.add_child(roster_bar)
+	roster_bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	roster_bar.add_theme_constant_override("separation", 8)
+	top_nav_hbox.add_child(roster_bar)
+
+	var sys_btn_box := HBoxContainer.new()
+	sys_btn_box.add_theme_constant_override("separation", 6)
+	top_nav_hbox.add_child(sys_btn_box)
+
+	var save_btn := Button.new()
+	save_btn.name = "SavePartyButton"
+	save_btn.text = "Save [F5]"
+	save_btn.pressed.connect(_on_save_party_pressed)
+	sys_btn_box.add_child(save_btn)
+
+	var load_btn := Button.new()
+	load_btn.name = "LoadPartyButton"
+	load_btn.text = "Load [F9]"
+	load_btn.pressed.connect(_on_load_party_pressed)
+	sys_btn_box.add_child(load_btn)
+
+	var reset_btn := Button.new()
+	reset_btn.name = "ResetButton"
+	reset_btn.text = "Reset"
+	reset_btn.pressed.connect(_on_reset_pressed)
+	sys_btn_box.add_child(reset_btn)
 
 	# Error Banner (hidden by default)
 	error_banner = Label.new()
 	error_banner.name = "ErrorBanner"
 	error_banner.visible = false
+	error_banner.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	error_banner.add_theme_color_override("font_color", Color(1.0, 0.38, 0.38))
 	main_vbox.add_child(error_banner)
 
@@ -195,19 +224,22 @@ func _build_ui() -> void:
 
 	var title_vbox := VBoxContainer.new()
 	title_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title_vbox.clip_contents = true
 	header_hbox.add_child(title_vbox)
 
 	title_label = Label.new()
 	title_label.name = "TitleLabel"
 	title_label.text = "Loading Character..."
-	title_label.add_theme_font_size_override("font_size", 26)
+	title_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	title_label.add_theme_font_size_override("font_size", 21)
 	title_label.add_theme_color_override("font_color", Color(0.95, 0.88, 0.65))
 	title_vbox.add_child(title_label)
 
 	subtitle_label = Label.new()
 	subtitle_label.name = "SubtitleLabel"
 	subtitle_label.text = "ID: -- | Race: -- | Class: -- | Alignment: --"
-	subtitle_label.add_theme_font_size_override("font_size", 14)
+	subtitle_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	subtitle_label.add_theme_font_size_override("font_size", 13)
 	subtitle_label.add_theme_color_override("font_color", Color(0.70, 0.76, 0.86))
 	title_vbox.add_child(subtitle_label)
 
@@ -245,24 +277,6 @@ func _build_ui() -> void:
 	potion_btn.text = "Potion [C]"
 	potion_btn.pressed.connect(_on_use_potion_pressed)
 	btn_box.add_child(potion_btn)
-
-	var save_btn := Button.new()
-	save_btn.name = "SavePartyButton"
-	save_btn.text = "Save [F5]"
-	save_btn.pressed.connect(_on_save_party_pressed)
-	btn_box.add_child(save_btn)
-
-	var load_btn := Button.new()
-	load_btn.name = "LoadPartyButton"
-	load_btn.text = "Load [F9]"
-	load_btn.pressed.connect(_on_load_party_pressed)
-	btn_box.add_child(load_btn)
-
-	var reset_btn := Button.new()
-	reset_btn.name = "ResetButton"
-	reset_btn.text = "Reset"
-	reset_btn.pressed.connect(_on_reset_pressed)
-	btn_box.add_child(reset_btn)
 
 	# Vitals Bars Row (Health & Mana)
 	var vitals_hbox := HBoxContainer.new()
@@ -491,6 +505,8 @@ func refresh_ui(data: Dictionary) -> void:
 				int(bonuses.get("max_hp", 0)),
 				int(bonuses.get("speed", 0.0))
 			]
+			bonus_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			bonus_lbl.add_theme_font_size_override("font_size", 12)
 			bonus_lbl.add_theme_color_override("font_color", Color(0.98, 0.82, 0.32))
 			inventory_box.add_child(bonus_lbl)
 
@@ -503,6 +519,8 @@ func refresh_ui(data: Dictionary) -> void:
 			int(item.get("quantity", 1)),
 			item_id_str
 		]
+		item_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		item_lbl.add_theme_font_size_override("font_size", 12)
 		if item_id_str.begins_with("relic_") or int(item.get("bonus_damage", 0)) > 0:
 			item_lbl.add_theme_color_override("font_color", Color(0.98, 0.86, 0.42))
 		elif item_id_str.begins_with("consum_"):

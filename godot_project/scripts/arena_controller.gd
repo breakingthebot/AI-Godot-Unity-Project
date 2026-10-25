@@ -22,8 +22,8 @@ const DUMMY_RADIUS: float = 24.0
 const PILLAR_RADIUS: float = 32.0
 const ARROW_HIT_RADIUS: float = 28.0
 const CONTACT_HIT_DISTANCE: float = 40.0
-const ARENA_MIN_BOUNDS: Vector2 = Vector2(48.0, 96.0)
-const ARENA_MAX_BOUNDS: Vector2 = Vector2(1100.0, 610.0)
+const ARENA_MIN_BOUNDS: Vector2 = Vector2(54.0, 96.0)
+const ARENA_MAX_BOUNDS: Vector2 = Vector2(972.0, 588.0)
 
 const DASH_MANA_COST: int = 6
 const DASH_BURST_DISTANCE: float = 145.0
@@ -999,7 +999,7 @@ func _init_dummies(scale_wave: int = 1) -> void:
 		var boss_hp := int(round(220.0 * hp_mult))
 		dummies.append({
 			"name": "Ashen Titan [BOSS]",
-			"pos": Vector2(980.0, 350.0),
+			"pos": Vector2(950.0, 350.0),
 			"hp": boss_hp,
 			"max_hp": boss_hp,
 			"speed": BASE_ENEMY_CHASE_SPEED * 0.78 * spd_mult,
@@ -1905,16 +1905,18 @@ func _build_arena_overlay() -> void:
 	_ui_layer.name = "ArenaOverlay"
 	add_child(_ui_layer)
 
+	# --- 1. Top Status & System Header Bar (y = 0..56) ---
 	var top_bar := PanelContainer.new()
+	top_bar.name = "TopHudBar"
 	top_bar.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
-	top_bar.custom_minimum_size = Vector2(0, 68)
+	top_bar.custom_minimum_size = Vector2(0, 56)
 	_ui_layer.add_child(top_bar)
 
 	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 18)
-	margin.add_theme_constant_override("margin_top", 10)
-	margin.add_theme_constant_override("margin_right", 18)
-	margin.add_theme_constant_override("margin_bottom", 10)
+	margin.add_theme_constant_override("margin_left", 14)
+	margin.add_theme_constant_override("margin_top", 6)
+	margin.add_theme_constant_override("margin_right", 14)
+	margin.add_theme_constant_override("margin_bottom", 6)
 	top_bar.add_child(margin)
 
 	var hbox := HBoxContainer.new()
@@ -1923,138 +1925,199 @@ func _build_arena_overlay() -> void:
 
 	var vbox := VBoxContainer.new()
 	vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vbox.clip_contents = true
+	vbox.add_theme_constant_override("separation", 2)
 	hbox.add_child(vbox)
 
 	_status_label = Label.new()
 	_status_label.name = "ArenaStatusLabel"
 	_status_label.text = "2D ARENA — WASD: Move | Click/Space: Attack | [Shift]: Dash | [Q]: Ultimate | [G]: Wave Survival"
+	_status_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	_status_label.add_theme_font_size_override("font_size", 12)
 	_status_label.add_theme_color_override("font_color", Color(0.95, 0.88, 0.65))
 	vbox.add_child(_status_label)
 
 	_combat_banner = Label.new()
 	_combat_banner.name = "ArenaCombatBanner"
 	_combat_banner.text = "Press [Q] for Class Ultimate (-15 MP), [Shift] to Mana Dash (-6 MP), or [G] for Wave Survival!"
+	_combat_banner.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	_combat_banner.add_theme_font_size_override("font_size", 11)
 	_combat_banner.add_theme_color_override("font_color", Color(0.65, 0.88, 0.75))
 	vbox.add_child(_combat_banner)
 
-	_wave_btn = Button.new()
-	_wave_btn.name = "WaveSurvivalButton"
-	_wave_btn.text = "Wave Survival: OFF [G]"
-	_wave_btn.pressed.connect(toggle_wave_survival)
-	hbox.add_child(_wave_btn)
-
-	_ai_btn = Button.new()
-	_ai_btn.name = "AiPilotButton"
-	_ai_btn.text = "AI Pilot: OFF [P]"
-	_ai_btn.pressed.connect(toggle_ai_pilot)
-	hbox.add_child(_ai_btn)
-
-	_stance_btn = Button.new()
-	_stance_btn.name = "ElementalStanceButton"
-	_stance_btn.text = "Infusion: NONE [V]"
-	_stance_btn.pressed.connect(func() -> void: cycle_elemental_stance())
-	hbox.add_child(_stance_btn)
-
-	var dash_btn := Button.new()
-	dash_btn.name = "ManaDashButton"
-	dash_btn.text = "Mana Dash [Shift]"
-	dash_btn.pressed.connect(func() -> void: trigger_mana_dash())
-	hbox.add_child(dash_btn)
-
-	var parry_btn := Button.new()
-	parry_btn.name = "ArcaneParryButton"
-	parry_btn.text = "Parry [F]"
-	parry_btn.pressed.connect(func() -> void: trigger_arcane_parry())
-	hbox.add_child(parry_btn)
-
-	var ult_btn := Button.new()
-	ult_btn.name = "UltimateAbilityButton"
-	ult_btn.text = "Ultimate [Q]"
-	ult_btn.pressed.connect(func() -> void: trigger_ultimate_ability())
-	hbox.add_child(ult_btn)
-
-	var loot_btn := Button.new()
-	loot_btn.name = "LootRelicButton"
-	loot_btn.text = "Loot Chest [E]"
-	loot_btn.pressed.connect(func() -> void: collect_nearest_relic_chest(true))
-	hbox.add_child(loot_btn)
-
-	var pot_btn := Button.new()
-	pot_btn.name = "ArenaPotionButton"
-	pot_btn.text = "Potion [C]"
-	pot_btn.pressed.connect(func() -> void: trigger_use_potion())
-	hbox.add_child(pot_btn)
-
-	var room_btn := Button.new()
-	room_btn.name = "NextRoomButton"
-	room_btn.text = "Next Room [N]"
-	room_btn.pressed.connect(func() -> void: enter_next_unexplored_room())
-	hbox.add_child(room_btn)
-
-	var respawn_btn := Button.new()
-	respawn_btn.name = "RespawnEnemiesButton"
-	respawn_btn.text = "Respawn [R]"
-	respawn_btn.pressed.connect(func() -> void: respawn_enemies(true))
-	hbox.add_child(respawn_btn)
-
-	var shop_btn := Button.new()
-	shop_btn.name = "MerchantShopButton"
-	shop_btn.text = "Merchant [B]"
-	shop_btn.pressed.connect(func() -> void: buy_merchant_upgrade())
-	hbox.add_child(shop_btn)
-
-	_talent_btn = Button.new()
-	_talent_btn.name = "TalentTreeButton"
-	_talent_btn.text = "Talent (%d) [T]" % talent_points
-	_talent_btn.pressed.connect(func() -> void: invest_talent_point())
-	hbox.add_child(_talent_btn)
-
-	var descend_btn := Button.new()
-	descend_btn.name = "DescendFloorButton"
-	descend_btn.text = "Descend [X]"
-	descend_btn.pressed.connect(func() -> void: descend_dungeon_floor())
-	hbox.add_child(descend_btn)
-
-	_bounty_btn = Button.new()
-	_bounty_btn.name = "BountyBoardButton"
-	_bounty_btn.text = "Bounties (T%d) [J]" % bounty_tier
-	_bounty_btn.pressed.connect(func() -> void: claim_or_advance_bounties())
-	hbox.add_child(_bounty_btn)
-
-	_familiar_btn = Button.new()
-	_familiar_btn.name = "FamiliarSummonButton"
-	_familiar_btn.text = "Familiar: OFF [Z]"
-	_familiar_btn.pressed.connect(func() -> void: summon_or_upgrade_familiar())
-	hbox.add_child(_familiar_btn)
+	var sys_hbox := HBoxContainer.new()
+	sys_hbox.add_theme_constant_override("separation", 6)
+	hbox.add_child(sys_hbox)
 
 	_telemetry_btn = Button.new()
 	_telemetry_btn.name = "TelemetryOverlayButton"
 	_telemetry_btn.text = "DPS: OFF [K]"
+	_telemetry_btn.add_theme_font_size_override("font_size", 11)
 	_telemetry_btn.pressed.connect(func() -> void: toggle_telemetry_overlay())
-	hbox.add_child(_telemetry_btn)
+	sys_hbox.add_child(_telemetry_btn)
 
 	_sfx_btn = Button.new()
 	_sfx_btn.name = "SfxMuteButton"
 	_sfx_btn.text = "SFX: ON [M]"
+	_sfx_btn.add_theme_font_size_override("font_size", 11)
 	_sfx_btn.pressed.connect(_on_toggle_sfx_mute)
-	hbox.add_child(_sfx_btn)
-
-	var lvl_btn := Button.new()
-	lvl_btn.text = "Level Up [L]"
-	lvl_btn.pressed.connect(_on_arena_level_up)
-	hbox.add_child(lvl_btn)
+	sys_hbox.add_child(_sfx_btn)
 
 	var back_btn := Button.new()
 	back_btn.name = "BackToSheetButton"
-	back_btn.text = "Character Sheet [Tab]"
+	back_btn.text = "Sheet [Tab]"
+	back_btn.add_theme_font_size_override("font_size", 11)
 	back_btn.pressed.connect(func() -> void: request_hud_toggle.emit())
-	hbox.add_child(back_btn)
+	sys_hbox.add_child(back_btn)
 
 	var title_btn := Button.new()
 	title_btn.name = "TitleMenuButton"
 	title_btn.text = "Title [ESC]"
+	title_btn.add_theme_font_size_override("font_size", 11)
 	title_btn.pressed.connect(_on_show_title_screen)
-	hbox.add_child(title_btn)
+	sys_hbox.add_child(title_btn)
+
+	# --- 2. Bottom 2-Row Action Dock (y = 636..720, below the Arena Floor) ---
+	var bottom_bar := PanelContainer.new()
+	bottom_bar.name = "BottomActionDock"
+	bottom_bar.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+	bottom_bar.custom_minimum_size = Vector2(0, 82)
+	_ui_layer.add_child(bottom_bar)
+
+	var b_margin := MarginContainer.new()
+	b_margin.add_theme_constant_override("margin_left", 12)
+	b_margin.add_theme_constant_override("margin_top", 5)
+	b_margin.add_theme_constant_override("margin_right", 12)
+	b_margin.add_theme_constant_override("margin_bottom", 5)
+	bottom_bar.add_child(b_margin)
+
+	var dock_vbox := VBoxContainer.new()
+	dock_vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	dock_vbox.add_theme_constant_override("separation", 4)
+	b_margin.add_child(dock_vbox)
+
+	var row1 := HBoxContainer.new()
+	row1.alignment = BoxContainer.ALIGNMENT_CENTER
+	row1.add_theme_constant_override("separation", 8)
+	dock_vbox.add_child(row1)
+
+	var row2 := HBoxContainer.new()
+	row2.alignment = BoxContainer.ALIGNMENT_CENTER
+	row2.add_theme_constant_override("separation", 8)
+	dock_vbox.add_child(row2)
+
+	# Row 1: Combat & Tactical Controls (8 buttons)
+	_wave_btn = Button.new()
+	_wave_btn.name = "WaveSurvivalButton"
+	_wave_btn.text = "Wave Survival: OFF [G]"
+	_wave_btn.add_theme_font_size_override("font_size", 11)
+	_wave_btn.pressed.connect(toggle_wave_survival)
+	row1.add_child(_wave_btn)
+
+	_ai_btn = Button.new()
+	_ai_btn.name = "AiPilotButton"
+	_ai_btn.text = "AI Pilot: OFF [P]"
+	_ai_btn.add_theme_font_size_override("font_size", 11)
+	_ai_btn.pressed.connect(toggle_ai_pilot)
+	row1.add_child(_ai_btn)
+
+	_stance_btn = Button.new()
+	_stance_btn.name = "ElementalStanceButton"
+	_stance_btn.text = "Infusion: NONE [V]"
+	_stance_btn.add_theme_font_size_override("font_size", 11)
+	_stance_btn.pressed.connect(func() -> void: cycle_elemental_stance())
+	row1.add_child(_stance_btn)
+
+	var dash_btn := Button.new()
+	dash_btn.name = "ManaDashButton"
+	dash_btn.text = "Mana Dash [Shift]"
+	dash_btn.add_theme_font_size_override("font_size", 11)
+	dash_btn.pressed.connect(func() -> void: trigger_mana_dash())
+	row1.add_child(dash_btn)
+
+	var parry_btn := Button.new()
+	parry_btn.name = "ArcaneParryButton"
+	parry_btn.text = "Parry [F]"
+	parry_btn.add_theme_font_size_override("font_size", 11)
+	parry_btn.pressed.connect(func() -> void: trigger_arcane_parry())
+	row1.add_child(parry_btn)
+
+	var ult_btn := Button.new()
+	ult_btn.name = "UltimateAbilityButton"
+	ult_btn.text = "Ultimate [Q]"
+	ult_btn.add_theme_font_size_override("font_size", 11)
+	ult_btn.pressed.connect(func() -> void: trigger_ultimate_ability())
+	row1.add_child(ult_btn)
+
+	var pot_btn := Button.new()
+	pot_btn.name = "ArenaPotionButton"
+	pot_btn.text = "Potion [C]"
+	pot_btn.add_theme_font_size_override("font_size", 11)
+	pot_btn.pressed.connect(func() -> void: trigger_use_potion())
+	row1.add_child(pot_btn)
+
+	var loot_btn := Button.new()
+	loot_btn.name = "LootRelicButton"
+	loot_btn.text = "Loot Chest [E]"
+	loot_btn.add_theme_font_size_override("font_size", 11)
+	loot_btn.pressed.connect(func() -> void: collect_nearest_relic_chest(true))
+	row1.add_child(loot_btn)
+
+	# Row 2: Dungeon & Progression Controls (8 buttons)
+	var room_btn := Button.new()
+	room_btn.name = "NextRoomButton"
+	room_btn.text = "Next Room [N]"
+	room_btn.add_theme_font_size_override("font_size", 11)
+	room_btn.pressed.connect(func() -> void: enter_next_unexplored_room())
+	row2.add_child(room_btn)
+
+	var respawn_btn := Button.new()
+	respawn_btn.name = "RespawnEnemiesButton"
+	respawn_btn.text = "Respawn [R]"
+	respawn_btn.add_theme_font_size_override("font_size", 11)
+	respawn_btn.pressed.connect(func() -> void: respawn_enemies(true))
+	row2.add_child(respawn_btn)
+
+	var shop_btn := Button.new()
+	shop_btn.name = "MerchantShopButton"
+	shop_btn.text = "Merchant [B]"
+	shop_btn.add_theme_font_size_override("font_size", 11)
+	shop_btn.pressed.connect(func() -> void: buy_merchant_upgrade())
+	row2.add_child(shop_btn)
+
+	_talent_btn = Button.new()
+	_talent_btn.name = "TalentTreeButton"
+	_talent_btn.text = "Talent (%d) [T]" % talent_points
+	_talent_btn.add_theme_font_size_override("font_size", 11)
+	_talent_btn.pressed.connect(func() -> void: invest_talent_point())
+	row2.add_child(_talent_btn)
+
+	var descend_btn := Button.new()
+	descend_btn.name = "DescendFloorButton"
+	descend_btn.text = "Descend [X]"
+	descend_btn.add_theme_font_size_override("font_size", 11)
+	descend_btn.pressed.connect(func() -> void: descend_dungeon_floor())
+	row2.add_child(descend_btn)
+
+	_bounty_btn = Button.new()
+	_bounty_btn.name = "BountyBoardButton"
+	_bounty_btn.text = "Bounties (T%d) [J]" % bounty_tier
+	_bounty_btn.add_theme_font_size_override("font_size", 11)
+	_bounty_btn.pressed.connect(func() -> void: claim_or_advance_bounties())
+	row2.add_child(_bounty_btn)
+
+	_familiar_btn = Button.new()
+	_familiar_btn.name = "FamiliarSummonButton"
+	_familiar_btn.text = "Familiar: OFF [Z]"
+	_familiar_btn.add_theme_font_size_override("font_size", 11)
+	_familiar_btn.pressed.connect(func() -> void: summon_or_upgrade_familiar())
+	row2.add_child(_familiar_btn)
+
+	var lvl_btn := Button.new()
+	lvl_btn.text = "Level Up [L]"
+	lvl_btn.add_theme_font_size_override("font_size", 11)
+	lvl_btn.pressed.connect(_on_arena_level_up)
+	row2.add_child(lvl_btn)
 
 
 func _on_show_title_screen() -> void:
@@ -3347,8 +3410,15 @@ func _draw() -> void:
 			draw_rect(Rect2(d_pos - Vector2(20, 16), Vector2(40, 32)), aura_col, true)
 		if font != null:
 			var status_tag := "[%s] %s" % [dir_str, target_name] if doors_unlocked else "[%s LOCKED]" % dir_str
-			var lbl_offset := Vector2(-58, -24) if dir_str != "N" else Vector2(-58, 34)
-			draw_string(font, d_pos + lbl_offset, status_tag, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.65, 1.0, 0.92) if doors_unlocked else Color(1.0, 0.55, 0.55))
+			var d_col := Color(0.65, 1.0, 0.92) if doors_unlocked else Color(1.0, 0.55, 0.55)
+			if dir_str == "N":
+				draw_string(font, d_pos + Vector2(-95, 32), status_tag, HORIZONTAL_ALIGNMENT_CENTER, 190.0, 10, d_col)
+			elif dir_str == "S":
+				draw_string(font, d_pos + Vector2(-95, -24), status_tag, HORIZONTAL_ALIGNMENT_CENTER, 190.0, 10, d_col)
+			elif dir_str == "W":
+				draw_string(font, d_pos + Vector2(26, 4), status_tag, HORIZONTAL_ALIGNMENT_LEFT, 185.0, 10, d_col)
+			elif dir_str == "E":
+				draw_string(font, d_pos + Vector2(-212, 4), status_tag, HORIZONTAL_ALIGNMENT_RIGHT, 185.0, 10, d_col)
 
 	# Flickering Corner & Wall Torch Sconces
 	var torch_positions := [
@@ -3600,16 +3670,17 @@ func _draw() -> void:
 		draw_rect(Rect2(bar_pos, Vector2(bar_w * hp_ratio, 8)), hp_col, true)
 
 		if font != null:
-			var enrage_tag := " [PHASE 2: ENRAGED]" if is_enraged else ""
+			var enrage_tag := " [P2]" if is_enraged else ""
 			var status_tags := ""
 			if float(dummy.get("frost_timer", 0.0)) > 0.0:
-				status_tags += " [FROST]"
+				status_tags += " [CHILL]"
 				draw_arc(d_pos, d_rad + 4.0, 0.0, TAU, 24, Color(0.38, 0.92, 1.0, 0.85), 2.0)
 			if float(dummy.get("burn_timer", 0.0)) > 0.0 and int(dummy.get("burn_stacks", 0)) > 0:
 				status_tags += " [BURN x%d]" % int(dummy.get("burn_stacks", 1))
 				draw_arc(d_pos, d_rad + 6.0, 0.0, TAU, 24, Color(1.0, 0.48, 0.14, 0.85), 2.0)
 			var label_str := "%s%s%s (%d/%d)" % [d_name, enrage_tag, status_tags, int(dummy["hp"]), int(dummy["max_hp"])]
-			draw_string(font, d_pos + Vector2(-68, -d_rad - 26.0), label_str, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(1.0, 0.55, 0.38) if is_enraged else Color(0.98, 0.92, 0.78))
+			var lbl_x: float = clampf(d_pos.x - 85.0, ARENA_MIN_BOUNDS.x - 10.0, ARENA_MAX_BOUNDS.x - 165.0)
+			draw_string(font, Vector2(lbl_x, d_pos.y - d_rad - 24.0), label_str, HORIZONTAL_ALIGNMENT_CENTER, 170.0, 11, Color(1.0, 0.55, 0.38) if is_enraged else Color(0.98, 0.92, 0.78))
 
 	# 6B. Crackling Jagged Stormchain Lightning Arcs
 	for arc in lightning_arcs:
@@ -3670,22 +3741,25 @@ func _draw() -> void:
 			draw_string(font, f_pos + Vector2(-26, 1), f_text, HORIZONTAL_ALIGNMENT_LEFT, -1, f_size, shadow_col)
 			draw_string(font, f_pos + Vector2(-27, 0), f_text, HORIZONTAL_ALIGNMENT_LEFT, -1, f_size, draw_col)
 
-	# 11. Live Top-Right Dungeon Minimap, Top-Left Quest Bounty Log & Combat Telemetry Overlays
+	# 11. Dedicated Right-Hand HUD Sidebar (x = 1012..1268, Outside Arena Floor -> Zero Map Overlap!)
 	_draw_dungeon_minimap(font)
 	_draw_bounty_tracker(font)
 	_draw_telemetry_overlay(font)
+	_draw_controls_legend(font)
 
 
 func _draw_telemetry_overlay(font: Font) -> void:
-	if font == null or not telemetry_overlay_visible:
+	if font == null:
 		return
-	var panel_rect := Rect2(Vector2(56.0, 202.0), Vector2(248.0, 152.0))
-	draw_rect(panel_rect, Color(0.04, 0.07, 0.11, 0.88), true)
-	draw_rect(panel_rect, Color(0.38, 0.92, 1.0, 0.92), false, 1.8)
-	draw_string(font, panel_rect.position + Vector2(8, 15), "COMBAT TELEMETRY & DPS [K]", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(0.45, 0.96, 1.0))
+	var panel_rect := Rect2(Vector2(1012.0, 336.0), Vector2(256.0, 160.0))
+	draw_rect(panel_rect, Color(0.04, 0.07, 0.11, 0.92), true)
+	var border_c := Color(0.38, 0.92, 1.0, 0.92) if telemetry_overlay_visible else Color(0.28, 0.42, 0.56, 0.75)
+	draw_rect(panel_rect, border_c, false, 1.8)
+	var state_tag := "ON" if telemetry_overlay_visible else "COMPACT"
+	draw_string(font, panel_rect.position + Vector2(8, 15), "COMBAT TELEMETRY [%s — K]" % state_tag, HORIZONTAL_ALIGNMENT_LEFT, 240.0, 10, Color(0.45, 0.96, 1.0))
 
 	var r_dps: float = get_rolling_dps()
-	var bar_bg := Rect2(panel_rect.position + Vector2(8, 21), Vector2(232.0, 7.0))
+	var bar_bg := Rect2(panel_rect.position + Vector2(8, 21), Vector2(240.0, 6.0))
 	var dps_fill_ratio: float = clampf(r_dps / 120.0, 0.0, 1.0)
 	draw_rect(bar_bg, Color(0.12, 0.16, 0.22, 0.95), true)
 	draw_rect(Rect2(bar_bg.position, Vector2(bar_bg.size.x * dps_fill_ratio, bar_bg.size.y)), Color(0.35, 0.95, 0.68), true)
@@ -3693,25 +3767,25 @@ func _draw_telemetry_overlay(font: Font) -> void:
 	var elem_procs: int = total_chilled_hits + total_elemental_burn_ticks + total_stormchain_arcs
 	var obs_crit_pct: int = int(round(float(total_critical_hits) / float(maxi(1, total_hits_landed)) * 100.0))
 	var rows: Array[String] = [
-		"Rolling DPS: %.1f/s | Total Dmg: %d" % [r_dps, total_damage_dealt],
-		"Hits: %d | Max Hit: %d | Crits: %d (%d%%)" % [total_hits_landed, highest_single_hit, total_critical_hits, obs_crit_pct],
+		"DPS: %.1f/s | Total Dmg: %d" % [r_dps, total_damage_dealt],
+		"Hits: %d | Max: %d | Crits: %d (%d%%)" % [total_hits_landed, highest_single_hit, total_critical_hits, obs_crit_pct],
 		"Parries [F]: %d | Cover Blocks: %d" % [total_projectiles_parried, obstacle_blocks_count],
-		"Elemental Procs: %d | Owl Bolts: %d" % [elem_procs, total_familiar_bolts_fired],
+		"Elem Procs: %d | Owl Bolts [Z]: %d" % [elem_procs, total_familiar_bolts_fired],
 		"Slain: %d | Gold Earned: %dg" % [total_enemies_defeated, total_gold_earned],
 		"AI Pilot [P]: %s (%d ops)" % [ai_last_action.to_upper(), ai_decisions_count]
 	]
 	for i in range(rows.size()):
 		var col := Color(0.95, 0.92, 0.55) if i == 0 else Color(0.84, 0.90, 0.96)
-		draw_string(font, panel_rect.position + Vector2(8, 42 + i * 19), rows[i], HORIZONTAL_ALIGNMENT_LEFT, -1, 10, col)
+		draw_string(font, panel_rect.position + Vector2(8, 41 + i * 19), rows[i], HORIZONTAL_ALIGNMENT_LEFT, 240.0, 10, col)
 
 
 func _draw_bounty_tracker(font: Font) -> void:
 	if font == null or bounties.is_empty():
 		return
-	var panel_rect := Rect2(Vector2(56.0, 102.0), Vector2(236.0, 92.0))
-	draw_rect(panel_rect, Color(0.06, 0.08, 0.12, 0.84), true)
-	draw_rect(panel_rect, Color(0.85, 0.68, 0.28, 0.88), false, 1.8)
-	draw_string(font, panel_rect.position + Vector2(8, 15), "BOUNTY BOARD (TIER %d) — Press [J]" % bounty_tier, HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(1.0, 0.88, 0.42))
+	var panel_rect := Rect2(Vector2(1012.0, 218.0), Vector2(256.0, 110.0))
+	draw_rect(panel_rect, Color(0.06, 0.08, 0.12, 0.92), true)
+	draw_rect(panel_rect, Color(0.85, 0.68, 0.28, 0.90), false, 1.8)
+	draw_string(font, panel_rect.position + Vector2(8, 16), "BOUNTY BOARD (TIER %d) [J]" % bounty_tier, HORIZONTAL_ALIGNMENT_LEFT, 240.0, 10, Color(1.0, 0.88, 0.42))
 	for i in range(bounties.size()):
 		var b: Dictionary = bounties[i]
 		var desc_str := str(b.get("desc", "Objective"))
@@ -3720,20 +3794,20 @@ func _draw_bounty_tracker(font: Font) -> void:
 		var r_gold: int = int(b.get("reward_gold", 40))
 		var is_done: bool = bool(b.get("completed", false))
 		var is_rdy: bool = bool(b.get("ready", false))
-		var status_str := "[DONE]" if is_done else ("[READY->J]" if is_rdy else "[%d/%d]" % [prog, targ])
+		var status_str := "[DONE]" if is_done else ("[CLAIM->J]" if is_rdy else "[%d/%d]" % [prog, targ])
 		var row_col := Color(0.45, 0.96, 0.58) if is_done else (Color(1.0, 0.92, 0.28) if is_rdy else Color(0.86, 0.90, 0.96))
 		var line_txt := "%s %s (+%dg)" % [status_str, desc_str, r_gold]
-		draw_string(font, panel_rect.position + Vector2(8, 34 + i * 20), line_txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 10, row_col)
+		draw_string(font, panel_rect.position + Vector2(8, 38 + i * 22), line_txt, HORIZONTAL_ALIGNMENT_LEFT, 240.0, 10, row_col)
 
 
 func _draw_dungeon_minimap(font: Font) -> void:
-	var map_rect := Rect2(Vector2(936.0, 102.0), Vector2(156.0, 124.0))
-	draw_rect(map_rect, Color(0.05, 0.07, 0.10, 0.88), true)
-	draw_rect(map_rect, Color(0.38, 0.55, 0.72, 0.92), false, 2.0)
+	var map_rect := Rect2(Vector2(1012.0, 68.0), Vector2(256.0, 142.0))
+	draw_rect(map_rect, Color(0.05, 0.07, 0.10, 0.92), true)
+	draw_rect(map_rect, Color(0.38, 0.55, 0.72, 0.92), false, 1.8)
 
-	var center := map_rect.position + Vector2(78.0, 68.0)
-	var cell_step := 28.0
-	var cell_size := Vector2(20.0, 16.0)
+	var center := map_rect.position + Vector2(128.0, 74.0)
+	var cell_step := 30.0
+	var cell_size := Vector2(22.0, 16.0)
 
 	# Draw connecting corridors from (0,0)
 	for key in dungeon_rooms.keys():
@@ -3782,12 +3856,30 @@ func _draw_dungeon_minimap(font: Font) -> void:
 				icon = "+"
 			elif visited:
 				icon = "•"
-			draw_string(font, c_pos + Vector2(5, 12), icon, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.06, 0.08, 0.10) if c == current_room_coord else Color(0.95, 0.95, 0.98))
+			draw_string(font, c_pos + Vector2(6, 12), icon, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.06, 0.08, 0.10) if c == current_room_coord else Color(0.95, 0.95, 0.98))
 
 	if font != null:
 		var curr_name := str(get_current_room().get("name", "Crypt Entry Hall"))
-		draw_string(font, map_rect.position + Vector2(8, 15), "FL.%d (%d/%d): %s" % [dungeon_floor, rooms_explored_count, dungeon_rooms.size(), curr_name.substr(0, 12)], HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(0.95, 0.88, 0.62))
-		draw_string(font, map_rect.position + Vector2(8, 118), "[N]: Room | [X]: Next Floor", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(0.65, 0.88, 0.95))
+		draw_string(font, map_rect.position + Vector2(8, 16), "FLOOR %d (%d/%d): %s" % [dungeon_floor, rooms_explored_count, dungeon_rooms.size(), curr_name], HORIZONTAL_ALIGNMENT_LEFT, 240.0, 10, Color(0.95, 0.88, 0.62))
+		draw_string(font, map_rect.position + Vector2(8, 134), "[N]: Next Room  |  [X]: Next Floor", HORIZONTAL_ALIGNMENT_LEFT, 240.0, 10, Color(0.65, 0.88, 0.95))
+
+
+func _draw_controls_legend(font: Font) -> void:
+	if font == null:
+		return
+	var leg_rect := Rect2(Vector2(1012.0, 504.0), Vector2(256.0, 112.0))
+	draw_rect(leg_rect, Color(0.05, 0.07, 0.10, 0.92), true)
+	draw_rect(leg_rect, Color(0.34, 0.42, 0.54, 0.82), false, 1.5)
+	draw_string(font, leg_rect.position + Vector2(8, 15), "CITADEL HOTKEYS & ACTIONS", HORIZONTAL_ALIGNMENT_LEFT, 240.0, 10, Color(0.92, 0.82, 0.48))
+	var lines: Array[String] = [
+		"WASD: Move | Space/Click: Attack",
+		"[Shift]: Dash | [F]: Parry | [Q]: Ult",
+		"[V]: Infusion | [B]: Shop | [T]: Talent",
+		"[J]: Bounties | [Z]: Owl | [R]: Respawn",
+		"[1]-[4]: Swap Hero | [ESC]: Title Menu"
+	]
+	for i in range(lines.size()):
+		draw_string(font, leg_rect.position + Vector2(8, 34 + i * 17), lines[i], HORIZONTAL_ALIGNMENT_LEFT, 240.0, 9, Color(0.76, 0.84, 0.92))
 
 
 func _refresh_status_bar() -> void:
