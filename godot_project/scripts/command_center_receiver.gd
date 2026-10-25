@@ -238,6 +238,15 @@ func execute_remote_command(command_name: String, payload: Dictionary = {}) -> D
 				var force_arm: bool = bool(payload.get("force_all_armed", false))
 				var t_res: Dictionary = arena.trigger_spike_trap_cycle(force_arm)
 				action_note = "Remote RPC cycled floor Spike Traps -> %d armed" % int(t_res.get("armed_count", 0))
+		"invest_talent":
+			if arena != null and arena.has_method("invest_talent_point"):
+				var branch_k: String = str(payload.get("branch", ""))
+				var tal_res: Dictionary = arena.invest_talent_point(branch_k)
+				action_note = "Remote RPC invested talent point -> %s" % str(tal_res.get("branch", tal_res.get("error", "none")))
+		"descend_floor":
+			if arena != null and arena.has_method("descend_dungeon_floor"):
+				var fl_res: Dictionary = arena.descend_dungeon_floor()
+				action_note = "Remote RPC descended to Dungeon Floor %d" % int(fl_res.get("dungeon_floor", 1))
 		"toggle_mute":
 			if sfx_node != null and sfx_node.has_method("toggle_mute"):
 				var muted_now: bool = sfx_node.toggle_mute()
@@ -337,6 +346,12 @@ func build_telemetry_snapshot() -> Dictionary:
 		"total_manual_respawns": int(arena.total_manual_respawns) if arena != null else 0,
 		"total_trap_triggers": int(arena.total_trap_triggers) if arena != null else 0,
 		"total_mimics_awakened": int(arena.total_mimics_awakened) if arena != null else 0,
+		"dungeon_floor": int(arena.dungeon_floor) if arena != null else 1,
+		"total_floor_descents": int(arena.total_floor_descents) if arena != null else 0,
+		"talent_points": int(arena.talent_points) if arena != null else 0,
+		"talents": arena.talents.duplicate() if arena != null else {},
+		"total_talents_invested": int(arena.total_talents_invested) if arena != null else 0,
+		"total_vampiric_healed": int(arena.total_vampiric_healed) if arena != null else 0,
 		"sfx_muted": bool(sfx_node.muted) if sfx_node != null else false,
 		"total_sfx_played": int(sfx_node.total_sfx_played) if sfx_node != null else 0,
 		"high_wave_reached": int(loader.high_wave_reached) if loader != null else 1,

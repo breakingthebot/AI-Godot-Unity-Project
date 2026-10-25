@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.6.0] - 2026-10-25
+- Add 3-Branch Hero Talent Tree & Level-Up Perk Selection (`invest_talent_point()` via **`[T]` key**, **`"Talent (1) [T]"` button**, and `"invest_talent"` UDP RPC) featuring **Twin-Shot Mastery** (fires 2 parallel projectiles per attack), **Vampiric Strikes** (`+4 HP` per rank life-steal on critical hits and kills), and **Arcane Overcharge** (`-25%` per rank Mana discount on Dash & Ultimates).
+- Add Procedural Dungeon Floor Escalation (`descend_dungeon_floor()` via **`[X]` key**, **`"Descend [X]"` button**, and `"descend_floor"` UDP RPC) advancing to `Floor 2`, `Floor 3`... with `+30g` bonus gold, `+1 Talent Point`, `+20 HP / +15 MP` recovery, reset 5-room dungeon floor graph, and scaled monsters.
+- Add `prop_stairs.png` spiral stone descent staircase sprite to `sprite_art_generator.gd` (bringing total exported `.png` sprites to 32) and expand headless Godot test suite to 50/50 assertions (`godot_project/tests/test_hud_headless.gd`).
+
 ## [2.5.0] - 2026-10-25
 - Add permanent enemy defeat (`hp = 0`, `alive = false` in all arena modes without auto-respawning) and on-demand enemy respawn (`respawn_enemies()` via **`[R]` key**, **`"Respawn [R]"` button**, and `"respawn_enemies"` UDP RPC).
 - Add Procedural Cyclic Floor Spike Traps (`_init_spike_traps()`, `trigger_spike_trap_cycle()`, `step_spike_traps()`, `"trigger_spike_trap"` UDP RPC) toggling every `2.0s` between retracted and armed states and dealing `12` piercing damage to overlapping enemies (`6` armor-mitigated bleed damage to heroes).

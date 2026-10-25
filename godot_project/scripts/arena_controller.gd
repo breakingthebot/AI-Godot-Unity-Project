@@ -81,6 +81,9 @@ const SPIKE_TRAP_TICK_INTERVAL: float = 0.6
 const SPIKE_TRAP_ENEMY_DAMAGE: int = 12
 const SPIKE_TRAP_HERO_DAMAGE: int = 6
 const SPIKE_TRAP_RADIUS: float = 28.0
+const TALENT_BRANCHES: Array[String] = ["twin_shot", "vampiric", "overcharge"]
+const STAIRS_POS: Vector2 = Vector2(574.0, 350.0)
+const FLOOR_BONUS_GOLD: int = 30
 
 var loader: Node = null
 var sfx_node: Node = null
@@ -157,6 +160,16 @@ var total_trap_triggers: int = 0
 var total_mimics_awakened: int = 0
 var total_enemies_defeated: int = 0
 var total_manual_respawns: int = 0
+var dungeon_floor: int = 1
+var total_floor_descents: int = 0
+var talent_points: int = 1
+var talents: Dictionary = {
+	"twin_shot": 0,
+	"vampiric": 0,
+	"overcharge": 0
+}
+var total_talents_invested: int = 0
+var total_vampiric_healed: int = 0
 
 var _ui_layer: CanvasLayer
 var _status_label: Label
@@ -164,6 +177,7 @@ var _combat_banner: Label
 var _wave_btn: Button
 var _ai_btn: Button
 var _stance_btn: Button
+var _talent_btn: Button
 var _sfx_btn: Button
 
 
@@ -418,6 +432,52 @@ func enter_next_unexplored_room() -> Dictionary:
 		var idx: int = total_door_transitions % doors.size()
 		return enter_dungeon_door(str(doors[idx]), true)
 	return {"error": "No connected doors available"}
+
+
+## Descends the stone spiral staircase ([X] Key / "Descend [X]" Button / "descend_floor" RPC) to the next Dungeon Floor.
+func descend_dungeon_floor() -> Dictionary:
+	var prev_transitions: int = total_door_transitions
+	dungeon_floor += 1
+	total_floor_descents += 1
+	wave_number += 1
+	talent_points += 1
+	_init_dungeon_floor()
+	total_door_transitions = prev_transitions + 1
+	player_pos = Vector2(260.0, 350.0)
+	arrows.clear()
+	enemy_projectiles.clear()
+	_init_dummies(wave_number + dungeon_floor - 1)
+	spawn_coin_drop(player_pos, FLOOR_BONUS_GOLD, true)
+	if loader != null:
+		loader.modify_health(20)
+		loader.modify_mana(15, true)
+	if _talent_btn != null:
+		_talent_btn.text = "Talent (%d) [T]" % talent_points
+
+	spawn_particle_burst(player_pos, Color(0.55, 0.96, 1.0), 24, 1.45)
+	trigger_screen_shake(0.38)
+	spawn_floating_text(player_pos + Vector2(0, -24), "FLOOR %d (+1 TALENT)!" % dungeon_floor, Color(0.55, 0.98, 1.0), true)
+	_play_sfx("level_up")
+
+	var msg := "[DUNGEON FLOOR %d REACHED! [X]] Descended spiral stairs (+%dg Gold, +1 Talent Point [T], +20 HP/+15 MP, Rooms Reset 1/%d)!" % [
+		dungeon_floor,
+		FLOOR_BONUS_GOLD,
+		dungeon_rooms.size()
+	]
+	if _combat_banner != null:
+		_combat_banner.text = msg
+	arena_combat_event.emit(msg)
+	_refresh_status_bar()
+	queue_redraw()
+	return {
+		"status": "floor_descended",
+		"dungeon_floor": dungeon_floor,
+		"wave_number": wave_number,
+		"talent_points": talent_points,
+		"rooms_explored_count": rooms_explored_count,
+		"total_floor_descents": total_floor_descents,
+		"message": msg
+	}
 
 
 ## Checks if the hero walked into an unlocked Stone Archway Door during manual movement.
@@ -1300,6 +1360,77 @@ func buy_merchant_upgrade(item_key: String = "") -> Dictionary:
 	}
 
 
+## Invests 1 Talent Point into a 3-Branch Hero Talent Tree ([T] Key / "Talent [T]" Button / "invest_talent" RPC).
+func invest_talent_point(branch_key: String = "") -> Dictionary:
+	var catalog := {
+		"twin_shot": "Twin-Shot Mastery (Fires 2 Parallel Projectiles per Attack)",
+		"vampiric": "Vampiric Strikes (+4 HP Life-Steal on Crits & Kills per Rank)",
+		"overcharge": "Arcane Overcharge (-25% Mana Cost on Dash & Ultimates per Rank)"
+	}
+	var req := branch_key.strip_edges().to_lower()
+	if req.is_empty():
+		req = TALENT_BRANCHES[total_talents_invested % TALENT_BRANCHES.size()]
+
+	if not catalog.has(req):
+		return {"error": "Unknown talent branch '%s'" % req}
+	if talent_points <= 0:
+		var err_msg := "[Talent Tree] No Talent Points available (0 pts) — Level Up [L] or Descend Floor [X] to earn +1 Talent Point!"
+		if _combat_banner != null:
+			_combat_banner.text = err_msg
+		return {"error": "No talent points available", "talent_points": talent_points, "message": err_msg}
+
+	talent_points -= 1
+	talents[req] = int(talents.get(req, 0)) + 1
+	total_talents_invested += 1
+	var new_rank: int = int(talents[req])
+
+	if _talent_btn != null:
+		_talent_btn.text = "Talent (%d) [T]" % talent_points
+
+	spawn_particle_burst(player_pos, Color(0.75, 0.45, 1.0), 18, 1.35)
+	spawn_floating_text(player_pos + Vector2(0, -24), "TALENT: %s R%d!" % [req.to_upper(), new_rank], Color(0.82, 0.58, 1.0), true)
+	_play_sfx("level_up")
+
+	var msg := "[Talent Unlocked -> %s (Rank %d)] %s (Talent Points Remaining: %d)!" % [
+		req.to_upper(),
+		new_rank,
+		str(catalog[req]),
+		talent_points
+	]
+	if _combat_banner != null:
+		_combat_banner.text = msg
+	arena_combat_event.emit(msg)
+	_refresh_status_bar()
+	queue_redraw()
+	return {
+		"status": "talent_invested",
+		"branch": req,
+		"rank": new_rank,
+		"talent_points_remaining": talent_points,
+		"talents": talents.duplicate(),
+		"total_talents_invested": total_talents_invested,
+		"message": msg
+	}
+
+
+## Returns the Mana Dash MP cost after applying Arcane Overcharge (-25% per rank) discount.
+func get_effective_dash_mana_cost() -> int:
+	var oc_rank: int = int(talents.get("overcharge", 0))
+	if oc_rank <= 0:
+		return DASH_MANA_COST
+	var mult: float = maxf(0.25, 1.0 - 0.25 * float(oc_rank))
+	return maxi(2, int(round(float(DASH_MANA_COST) * mult)))
+
+
+## Returns the Class Ultimate MP cost after applying Arcane Overcharge (-25% per rank) discount.
+func get_effective_ultimate_mana_cost() -> int:
+	var oc_rank: int = int(talents.get("overcharge", 0))
+	if oc_rank <= 0:
+		return ULTIMATE_MANA_COST
+	var mult: float = maxf(0.25, 1.0 - 0.25 * float(oc_rank))
+	return maxi(5, int(round(float(ULTIMATE_MANA_COST) * mult)))
+
+
 func _build_arena_overlay() -> void:
 	_ui_layer = CanvasLayer.new()
 	_ui_layer.name = "ArenaOverlay"
@@ -1402,6 +1533,18 @@ func _build_arena_overlay() -> void:
 	shop_btn.text = "Merchant [B]"
 	shop_btn.pressed.connect(func() -> void: buy_merchant_upgrade())
 	hbox.add_child(shop_btn)
+
+	_talent_btn = Button.new()
+	_talent_btn.name = "TalentTreeButton"
+	_talent_btn.text = "Talent (%d) [T]" % talent_points
+	_talent_btn.pressed.connect(func() -> void: invest_talent_point())
+	hbox.add_child(_talent_btn)
+
+	var descend_btn := Button.new()
+	descend_btn.name = "DescendFloorButton"
+	descend_btn.text = "Descend [X]"
+	descend_btn.pressed.connect(func() -> void: descend_dungeon_floor())
+	hbox.add_child(descend_btn)
 
 	_sfx_btn = Button.new()
 	_sfx_btn.name = "SfxMuteButton"
@@ -1518,8 +1661,9 @@ func trigger_mana_dash(override_dir: Vector2 = Vector2.ZERO) -> Dictionary:
 		var mana: Dictionary = loader.current_data.get("mana", {})
 		current_mp = int(mana.get("current", 0))
 
-	if current_mp < DASH_MANA_COST:
-		var low_msg := "[Mana Dash] Not enough Mana (%d/%d MP required)!" % [current_mp, DASH_MANA_COST]
+	var dash_cost := get_effective_dash_mana_cost()
+	if current_mp < dash_cost:
+		var low_msg := "[Mana Dash] Not enough Mana (%d/%d MP required)!" % [current_mp, dash_cost]
 		if _combat_banner != null:
 			_combat_banner.text = low_msg
 		return {"error": "Insufficient mana", "current_mp": current_mp}
@@ -1529,7 +1673,7 @@ func trigger_mana_dash(override_dir: Vector2 = Vector2.ZERO) -> Dictionary:
 		dash_dir = aim_dir if aim_dir.length_squared() > 0.001 else Vector2.RIGHT
 
 	if loader != null and loader.has_method("modify_mana"):
-		loader.modify_mana(-DASH_MANA_COST, true)
+		loader.modify_mana(-dash_cost, true)
 
 	player_pos += dash_dir * DASH_BURST_DISTANCE
 	var dash_col := resolve_circle_obstacle_collision(player_pos, PLAYER_RADIUS)
@@ -1553,7 +1697,7 @@ func trigger_mana_dash(override_dir: Vector2 = Vector2.ZERO) -> Dictionary:
 
 	var msg := "[Mana Dash: %s] Spent %d MP -> Bursted %d px (0.45s Invulnerability)!" % [
 		dash_skill_name,
-		DASH_MANA_COST,
+		dash_cost,
 		int(DASH_BURST_DISTANCE)
 	]
 	_play_sfx("dash")
@@ -1565,7 +1709,7 @@ func trigger_mana_dash(override_dir: Vector2 = Vector2.ZERO) -> Dictionary:
 	return {
 		"status": "dashed",
 		"new_pos": player_pos,
-		"mana_spent": DASH_MANA_COST,
+		"mana_spent": dash_cost,
 		"iframe_timer": dash_iframe_timer,
 		"message": msg
 	}
@@ -2123,14 +2267,15 @@ func trigger_ultimate_ability() -> Dictionary:
 		var mana: Dictionary = loader.current_data.get("mana", {})
 		current_mp = int(mana.get("current", 0))
 
-	if current_mp < ULTIMATE_MANA_COST:
-		var low_msg := "[Ultimate] Not enough Mana (%d/%d MP required)!" % [current_mp, ULTIMATE_MANA_COST]
+	var ult_cost := get_effective_ultimate_mana_cost()
+	if current_mp < ult_cost:
+		var low_msg := "[Ultimate] Not enough Mana (%d/%d MP required)!" % [current_mp, ult_cost]
 		if _combat_banner != null:
 			_combat_banner.text = low_msg
 		return {"error": "Insufficient mana", "current_mp": current_mp}
 
 	if loader != null and loader.has_method("modify_mana"):
-		loader.modify_mana(-ULTIMATE_MANA_COST, true)
+		loader.modify_mana(-ult_cost, true)
 
 	ultimate_cooldown_timer = ULTIMATE_COOLDOWN
 	ult_vfx_timer = 0.55
@@ -2225,7 +2370,7 @@ func trigger_ultimate_ability() -> Dictionary:
 			msg = "[ULTIMATE: %s] Fired 5-Arrow Spread Volley (%d dmg per arrow, -%d MP)!" % [
 				ult_name,
 				volley_dmg,
-				ULTIMATE_MANA_COST
+				ult_cost
 			]
 
 	_play_sfx("ultimate")
@@ -2237,7 +2382,7 @@ func trigger_ultimate_ability() -> Dictionary:
 	return {
 		"status": "ultimate_cast",
 		"ultimate_name": ult_name,
-		"mana_spent": ULTIMATE_MANA_COST,
+		"mana_spent": ult_cost,
 		"projectiles_spawned": projectiles_spawned,
 		"targets_hit": targets_hit,
 		"total_aoe_damage": total_aoe_damage,
@@ -2245,7 +2390,7 @@ func trigger_ultimate_ability() -> Dictionary:
 	}
 
 
-## Spawns a projectile aimed toward target_world_pos.
+## Spawns a projectile aimed toward target_world_pos (or 2 parallel projectiles if Twin-Shot Mastery [T] is unlocked).
 func fire_arrow_at(target_world_pos: Vector2, allow_random_crit: bool = false) -> Dictionary:
 	var dir := (target_world_pos - player_pos).normalized()
 	if dir.length_squared() < 0.001:
@@ -2254,18 +2399,26 @@ func fire_arrow_at(target_world_pos: Vector2, allow_random_crit: bool = false) -
 
 	var dmg := get_calculated_arrow_damage()
 	var crit_rolled := roll_critical_hit(allow_random_crit)
-	var projectile := {
-		"pos": player_pos + dir * (PLAYER_RADIUS + 8.0),
-		"vel": dir * ARROW_SPEED,
-		"damage": dmg,
-		"is_crit": crit_rolled,
-		"ttl": 2.0
-	}
-	arrows.append(projectile)
+	var twin_rank: int = int(talents.get("twin_shot", 0))
+	var angles: Array = [-6.0, 6.0] if twin_rank > 0 else [0.0]
+	var first_proj: Dictionary = {}
+	for deg in angles:
+		var shot_dir: Vector2 = dir.rotated(deg_to_rad(float(deg)))
+		var projectile := {
+			"pos": player_pos + shot_dir * (PLAYER_RADIUS + 8.0),
+			"vel": shot_dir * ARROW_SPEED,
+			"damage": dmg,
+			"is_crit": crit_rolled,
+			"ttl": 2.0
+		}
+		arrows.append(projectile)
+		if first_proj.is_empty():
+			first_proj = projectile
+	first_proj["twin_shot_spawned"] = angles.size()
 	_play_sfx("shoot")
 	_refresh_status_bar()
 	queue_redraw()
-	return projectile
+	return first_proj
 
 
 ## Applies damage to a target dummy by index (with Critical Hit 2x multiplier & Floating Combat Text) and handles Wave Survival progression.
@@ -2301,6 +2454,14 @@ func apply_damage_to_dummy(dummy_index: int, damage: int, is_crit: bool = false,
 	dummy["flash_timer"] = 0.18
 	var atk_name := get_primary_attack_name()
 	var crit_prefix := "[CRIT 2x!] " if crit_active else ""
+
+	var vamp_rank: int = int(talents.get("vampiric", 0))
+	if vamp_rank > 0 and (crit_active or new_hp <= 0):
+		var vamp_heal: int = 4 * vamp_rank
+		if loader != null and loader.has_method("modify_health"):
+			loader.modify_health(vamp_heal)
+		total_vampiric_healed += vamp_heal
+		spawn_floating_text(player_pos + Vector2(0, -18), "+%d HP [VAMP]" % vamp_heal, Color(0.98, 0.28, 0.45), false)
 
 	var msg: String = ""
 	if new_hp <= 0:
@@ -2441,6 +2602,10 @@ func _unhandled_input(event: InputEvent) -> void:
 				buy_merchant_upgrade()
 			elif ke.keycode == KEY_R:
 				respawn_enemies(true)
+			elif ke.keycode == KEY_T:
+				invest_talent_point()
+			elif ke.keycode == KEY_X:
+				descend_dungeon_floor()
 
 
 func _process(delta: float) -> void:
@@ -2751,7 +2916,15 @@ func _draw() -> void:
 		if font != null:
 			draw_string(font, c_pos + Vector2(-42, -18), "Relic Chest [E]", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(1.0, 0.92, 0.45))
 
-	# 4B. Hooded Dungeon Merchant NPC (Vaelor the Broker) & Magnetized Gold Coin Drops
+	# 4B. Hooded Dungeon Merchant NPC (Vaelor the Broker), Spiral Descent Staircase & Magnetized Gold Coin Drops
+	if are_room_doors_unlocked():
+		var stairs_tex: Texture2D = sprite_gen.get_prop_texture("prop_stairs")
+		draw_circle(STAIRS_POS, 26.0 + sin(_anim_time * 6.0) * 2.0, Color(0.28, 0.92, 0.98, 0.35))
+		if stairs_tex != null:
+			draw_texture_rect(stairs_tex, Rect2(STAIRS_POS - Vector2(22, 18), Vector2(44, 36)), false)
+		if font != null:
+			draw_string(font, STAIRS_POS + Vector2(-58, -22), "Descend Stairs [X -> Fl.%d]" % (dungeon_floor + 1), HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.55, 0.98, 1.0))
+
 	var merch_tex: Texture2D = sprite_gen.get_prop_texture("npc_merchant")
 	draw_circle(MERCHANT_POS + Vector2(0, 14), 16.0, Color(0.03, 0.04, 0.06, 0.55))
 	draw_arc(MERCHANT_POS, 26.0 + sin(_anim_time * 5.0) * 2.0, 0.0, TAU, 32, Color(0.98, 0.82, 0.25, 0.65), 2.0)
@@ -3026,8 +3199,8 @@ func _draw_dungeon_minimap(font: Font) -> void:
 
 	if font != null:
 		var curr_name := str(get_current_room().get("name", "Crypt Entry Hall"))
-		draw_string(font, map_rect.position + Vector2(8, 15), "MAP (%d/%d): %s" % [rooms_explored_count, dungeon_rooms.size(), curr_name.substr(0, 14)], HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(0.95, 0.88, 0.62))
-		draw_string(font, map_rect.position + Vector2(8, 118), "[N] or Walk to Door", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(0.65, 0.88, 0.95))
+		draw_string(font, map_rect.position + Vector2(8, 15), "FL.%d (%d/%d): %s" % [dungeon_floor, rooms_explored_count, dungeon_rooms.size(), curr_name.substr(0, 12)], HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(0.95, 0.88, 0.62))
+		draw_string(font, map_rect.position + Vector2(8, 118), "[N]: Room | [X]: Next Floor", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(0.65, 0.88, 0.95))
 
 
 func _refresh_status_bar() -> void:
@@ -3047,10 +3220,10 @@ func _refresh_status_bar() -> void:
 
 	var boss_suffix := " [BOSS]" if (wave_survival_active and is_boss_wave()) else ""
 	var room_name := str(get_current_room().get("name", "Crypt Entry Hall"))
-	var mode_tag := "WAVE %d%s (Score: %d)" % [wave_number, boss_suffix, wave_score] if wave_survival_active else "PRACTICE"
+	var mode_tag := "WAVE %d%s (Score: %d)" % [wave_number, boss_suffix, wave_score] if wave_survival_active else "FL.%d" % dungeon_floor
 	var crit_pct := int(round(get_calculated_crit_chance() * 100.0))
 	_status_label.text = (
-		"[%s | %s (%d/%d)] %s (Lv.%d) | HP: %s | MP: %s | Gold: %dg | %s: %d Dmg (Crit: %d%%) | [R]: Respawn | [B]: Shop"
+		"[%s | %s (%d/%d)] %s (Lv.%d) | HP: %s | MP: %s | Gold: %dg | Talents: %d [T] | %s: %d Dmg (Crit: %d%%) | [R]: Respawn | [X]: Floor"
 		% [
 			mode_tag,
 			room_name,
@@ -3061,6 +3234,7 @@ func _refresh_status_bar() -> void:
 			hp_str,
 			mp_str,
 			gold_coins,
+			talent_points,
 			get_primary_attack_name(),
 			get_calculated_arrow_damage(),
 			crit_pct
@@ -3081,6 +3255,9 @@ func _on_character_updated(_data: Dictionary, _msg: String) -> void:
 func _on_arena_level_up() -> void:
 	if loader != null:
 		loader.apply_level_up()
+		talent_points += 1
+		if _talent_btn != null:
+			_talent_btn.text = "Talent (%d) [T]" % talent_points
 		_play_sfx("level_up")
 		_refresh_status_bar()
 
