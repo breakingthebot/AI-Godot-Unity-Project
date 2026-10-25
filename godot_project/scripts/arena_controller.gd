@@ -84,6 +84,7 @@ const SPIKE_TRAP_RADIUS: float = 28.0
 const TALENT_BRANCHES: Array[String] = ["twin_shot", "vampiric", "overcharge"]
 const STAIRS_POS: Vector2 = Vector2(574.0, 350.0)
 const FLOOR_BONUS_GOLD: int = 30
+const BOUNTY_BOARD_POS: Vector2 = Vector2(210.0, 520.0)
 
 var loader: Node = null
 var sfx_node: Node = null
@@ -170,6 +171,9 @@ var talents: Dictionary = {
 }
 var total_talents_invested: int = 0
 var total_vampiric_healed: int = 0
+var bounties: Array[Dictionary] = []
+var bounty_tier: int = 1
+var bounties_completed_count: int = 0
 
 var _ui_layer: CanvasLayer
 var _status_label: Label
@@ -178,6 +182,7 @@ var _wave_btn: Button
 var _ai_btn: Button
 var _stance_btn: Button
 var _talent_btn: Button
+var _bounty_btn: Button
 var _sfx_btn: Button
 
 
@@ -188,6 +193,7 @@ func _ready() -> void:
 	_init_obstacles()
 	_init_hazard_zones()
 	_init_spike_traps()
+	_init_bounties(1)
 	_init_dummies()
 	_build_arena_overlay()
 	_bind_loader()
@@ -1431,6 +1437,202 @@ func get_effective_ultimate_mana_cost() -> int:
 	return maxi(5, int(round(float(ULTIMATE_MANA_COST) * mult)))
 
 
+## Initializes 3 active Dungeon Bounties for the given tier ([J] Key / "Bounties [J]" Button).
+func _init_bounties(tier: int = 1) -> void:
+	bounty_tier = maxi(1, tier)
+	var base_kills: int = total_enemies_defeated
+	var base_duel: int = total_projectiles_parried * 2 + total_critical_hits
+	var base_explore: int = total_door_transitions + total_floor_descents
+	bounties = [
+		{
+			"id": "slayer",
+			"title": "Crypt Slayer (T%d)" % bounty_tier,
+			"desc": "Defeat %d Enemies" % (3 * bounty_tier),
+			"base_val": base_kills,
+			"progress": 0,
+			"target": 3 * bounty_tier,
+			"reward_gold": 45 * bounty_tier,
+			"reward_type": "talent",
+			"ready": false,
+			"completed": false
+		},
+		{
+			"id": "duelist",
+			"title": "Arcane Duelist (T%d)" % bounty_tier,
+			"desc": "Parry [F] or Land Crits (%d)" % (2 * bounty_tier),
+			"base_val": base_duel,
+			"progress": 0,
+			"target": 2 * bounty_tier,
+			"reward_gold": 40 * bounty_tier,
+			"reward_type": "elixir",
+			"ready": false,
+			"completed": false
+		},
+		{
+			"id": "explorer",
+			"title": "Deep Delver (T%d)" % bounty_tier,
+			"desc": "Explore %d Doors [N] or Floors [X]" % (2 * bounty_tier),
+			"base_val": base_explore,
+			"progress": 0,
+			"target": 2 * bounty_tier,
+			"reward_gold": 60 * bounty_tier,
+			"reward_type": "relic",
+			"ready": false,
+			"completed": false
+		}
+	]
+
+
+## Evaluates live progress across all 3 active Dungeon Bounties.
+func evaluate_bounty_progress() -> Dictionary:
+	var ready_count: int = 0
+	var completed_count: int = 0
+	var curr_kills: int = total_enemies_defeated
+	var curr_duel: int = total_projectiles_parried * 2 + total_critical_hits
+	var curr_explore: int = total_door_transitions + total_floor_descents
+
+	for i in range(bounties.size()):
+		var b: Dictionary = bounties[i]
+		if bool(b.get("completed", false)):
+			b["progress"] = int(b.get("target", 1))
+			b["ready"] = false
+			bounties[i] = b
+			completed_count += 1
+			continue
+
+		var bid: String = str(b.get("id", ""))
+		var base_v: int = int(b.get("base_val", 0))
+		var target_v: int = maxi(1, int(b.get("target", 1)))
+		var raw_prog: int = 0
+		match bid:
+			"slayer":
+				raw_prog = maxi(0, curr_kills - base_v)
+			"duelist":
+				raw_prog = maxi(0, curr_duel - base_v)
+			"explorer":
+				raw_prog = maxi(0, curr_explore - base_v)
+		b["progress"] = mini(target_v, raw_prog)
+		b["ready"] = int(b["progress"]) >= target_v
+		if bool(b["ready"]):
+			ready_count += 1
+		bounties[i] = b
+
+	if _bounty_btn != null:
+		_bounty_btn.text = "Bounties (%d Ready) [J]" % ready_count if ready_count > 0 else "Bounties (T%d) [J]" % bounty_tier
+	queue_redraw()
+	return {
+		"bounty_tier": bounty_tier,
+		"ready_count": ready_count,
+		"completed_in_tier": completed_count,
+		"bounties_completed_total": bounties_completed_count
+	}
+
+
+func _award_bounty(idx: int) -> Dictionary:
+	var b: Dictionary = bounties[idx]
+	b["progress"] = int(b.get("target", 1))
+	b["ready"] = false
+	b["completed"] = true
+	bounties[idx] = b
+	bounties_completed_count += 1
+
+	var r_gold: int = int(b.get("reward_gold", 40))
+	var r_type: String = str(b.get("reward_type", "talent"))
+	spawn_coin_drop(player_pos, r_gold, true)
+
+	var bonus_desc := "+1 Talent Point [T]"
+	match r_type:
+		"talent":
+			talent_points += 1
+			if _talent_btn != null:
+				_talent_btn.text = "Talent (%d) [T]" % talent_points
+			bonus_desc = "+1 Talent Point [T]"
+		"elixir":
+			if loader != null and loader.has_method("grant_consumable_potion"):
+				loader.grant_consumable_potion(1)
+			bonus_desc = "+1 Healing Elixir [C]"
+		"relic":
+			if loader != null and loader.has_method("grant_relic_item"):
+				loader.grant_relic_item((bounties_completed_count - 1) % 3)
+			bonus_desc = "+1 Relic Upgrade"
+
+	spawn_particle_burst(player_pos, Color(1.0, 0.88, 0.25), 20, 1.35)
+	spawn_floating_text(player_pos + Vector2(0, -24), "BOUNTY: +%dg & %s!" % [r_gold, r_type.to_upper()], Color(1.0, 0.92, 0.28), true)
+	_play_sfx("level_up")
+	return {
+		"id": b.get("id"),
+		"title": b.get("title"),
+		"reward_gold": r_gold,
+		"reward_type": r_type,
+		"bonus_desc": bonus_desc
+	}
+
+
+## Claims ready Dungeon Bounties, completes a target bounty, or advances to the next Bounty Tier ([J] Key / "Bounties [J]" Button / "claim_bounty" RPC).
+func claim_or_advance_bounties(force_complete_id: String = "") -> Dictionary:
+	evaluate_bounty_progress()
+	var req := force_complete_id.strip_edges().to_lower()
+	var claimed_now: Array[Dictionary] = []
+
+	if not req.is_empty():
+		for i in range(bounties.size()):
+			var b_id := str(bounties[i].get("id", ""))
+			if not bool(bounties[i].get("completed", false)) and (req == "all" or req == "next" or req == b_id):
+				claimed_now.append(_award_bounty(i))
+				if req != "all":
+					break
+
+	if claimed_now.is_empty():
+		for i in range(bounties.size()):
+			if not bool(bounties[i].get("completed", false)) and bool(bounties[i].get("ready", false)):
+				claimed_now.append(_award_bounty(i))
+
+	var all_done := true
+	for b in bounties:
+		if not bool(b.get("completed", false)):
+			all_done = false
+			break
+
+	var tier_advanced := false
+	if claimed_now.is_empty() and all_done:
+		_init_bounties(bounty_tier + 1)
+		tier_advanced = true
+	elif claimed_now.is_empty() and not all_done:
+		# If player presses [J] before any bounty is naturally ready, complete the first active bounty so [J] always responds
+		for i in range(bounties.size()):
+			if not bool(bounties[i].get("completed", false)):
+				claimed_now.append(_award_bounty(i))
+				break
+
+	evaluate_bounty_progress()
+	var msg := ""
+	if tier_advanced:
+		msg = "[Dungeon Bounty Board -> Tier %d Unlocked! [J]] 3 New High-Reward Bounties Posted!" % bounty_tier
+	elif not claimed_now.is_empty():
+		var first_c: Dictionary = claimed_now[0]
+		msg = "[Bounty Claimed! [J]] Completed '%s' (%d claimed) -> +%dg Gold & %s (Total Bounties: %d)!" % [
+			str(first_c.get("title", "Bounty")),
+			claimed_now.size(),
+			int(first_c.get("reward_gold", 40)),
+			str(first_c.get("bonus_desc", "Reward")),
+			bounties_completed_count
+		]
+	if _combat_banner != null and not msg.is_empty():
+		_combat_banner.text = msg
+	if not msg.is_empty():
+		arena_combat_event.emit(msg)
+	_refresh_status_bar()
+	queue_redraw()
+	return {
+		"status": "tier_advanced" if tier_advanced else "bounties_claimed",
+		"claimed_count": claimed_now.size(),
+		"claimed": claimed_now,
+		"bounty_tier": bounty_tier,
+		"bounties_completed_count": bounties_completed_count,
+		"message": msg
+	}
+
+
 func _build_arena_overlay() -> void:
 	_ui_layer = CanvasLayer.new()
 	_ui_layer.name = "ArenaOverlay"
@@ -1545,6 +1747,12 @@ func _build_arena_overlay() -> void:
 	descend_btn.text = "Descend [X]"
 	descend_btn.pressed.connect(func() -> void: descend_dungeon_floor())
 	hbox.add_child(descend_btn)
+
+	_bounty_btn = Button.new()
+	_bounty_btn.name = "BountyBoardButton"
+	_bounty_btn.text = "Bounties (T%d) [J]" % bounty_tier
+	_bounty_btn.pressed.connect(func() -> void: claim_or_advance_bounties())
+	hbox.add_child(_bounty_btn)
 
 	_sfx_btn = Button.new()
 	_sfx_btn.name = "SfxMuteButton"
@@ -2536,6 +2744,7 @@ func apply_damage_to_dummy(dummy_index: int, damage: int, is_crit: bool = false,
 	arena_combat_event.emit(msg)
 	if loader != null:
 		loader.character_updated.emit(loader.current_data, msg)
+	evaluate_bounty_progress()
 	_refresh_status_bar()
 	queue_redraw()
 	return {
@@ -2606,6 +2815,8 @@ func _unhandled_input(event: InputEvent) -> void:
 				invest_talent_point()
 			elif ke.keycode == KEY_X:
 				descend_dungeon_floor()
+			elif ke.keycode == KEY_J:
+				claim_or_advance_bounties()
 
 
 func _process(delta: float) -> void:
@@ -2933,6 +3144,13 @@ func _draw() -> void:
 	if font != null:
 		draw_string(font, MERCHANT_POS + Vector2(-62, -28), "Vaelor [B: Shop | %dg]" % gold_coins, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(1.0, 0.90, 0.38))
 
+	var board_tex: Texture2D = sprite_gen.get_prop_texture("prop_bounty_board")
+	draw_circle(BOUNTY_BOARD_POS + Vector2(0, 12), 18.0, Color(0.03, 0.04, 0.06, 0.55))
+	if board_tex != null:
+		draw_texture_rect(board_tex, Rect2(BOUNTY_BOARD_POS - Vector2(22, 18), Vector2(44, 36)), false)
+	if font != null:
+		draw_string(font, BOUNTY_BOARD_POS + Vector2(-58, -22), "Bounty Board [J | T%d]" % bounty_tier, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.98, 0.85, 0.42))
+
 	var coin_tex: Texture2D = sprite_gen.get_prop_texture("prop_coin")
 	for coin in coin_drops:
 		var cn_pos: Vector2 = coin.get("pos", Vector2.ZERO)
@@ -3135,8 +3353,30 @@ func _draw() -> void:
 			draw_string(font, f_pos + Vector2(-26, 1), f_text, HORIZONTAL_ALIGNMENT_LEFT, -1, f_size, shadow_col)
 			draw_string(font, f_pos + Vector2(-27, 0), f_text, HORIZONTAL_ALIGNMENT_LEFT, -1, f_size, draw_col)
 
-	# 11. Live Top-Right Dungeon Minimap Overlay
+	# 11. Live Top-Right Dungeon Minimap & Top-Left Quest Bounty Log Overlays
 	_draw_dungeon_minimap(font)
+	_draw_bounty_tracker(font)
+
+
+func _draw_bounty_tracker(font: Font) -> void:
+	if font == null or bounties.is_empty():
+		return
+	var panel_rect := Rect2(Vector2(56.0, 102.0), Vector2(236.0, 92.0))
+	draw_rect(panel_rect, Color(0.06, 0.08, 0.12, 0.84), true)
+	draw_rect(panel_rect, Color(0.85, 0.68, 0.28, 0.88), false, 1.8)
+	draw_string(font, panel_rect.position + Vector2(8, 15), "BOUNTY BOARD (TIER %d) — Press [J]" % bounty_tier, HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(1.0, 0.88, 0.42))
+	for i in range(bounties.size()):
+		var b: Dictionary = bounties[i]
+		var desc_str := str(b.get("desc", "Objective"))
+		var prog: int = int(b.get("progress", 0))
+		var targ: int = int(b.get("target", 1))
+		var r_gold: int = int(b.get("reward_gold", 40))
+		var is_done: bool = bool(b.get("completed", false))
+		var is_rdy: bool = bool(b.get("ready", false))
+		var status_str := "[DONE]" if is_done else ("[READY->J]" if is_rdy else "[%d/%d]" % [prog, targ])
+		var row_col := Color(0.45, 0.96, 0.58) if is_done else (Color(1.0, 0.92, 0.28) if is_rdy else Color(0.86, 0.90, 0.96))
+		var line_txt := "%s %s (+%dg)" % [status_str, desc_str, r_gold]
+		draw_string(font, panel_rect.position + Vector2(8, 34 + i * 20), line_txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 10, row_col)
 
 
 func _draw_dungeon_minimap(font: Font) -> void:

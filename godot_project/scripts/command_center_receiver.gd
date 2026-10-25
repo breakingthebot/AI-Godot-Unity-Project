@@ -247,6 +247,11 @@ func execute_remote_command(command_name: String, payload: Dictionary = {}) -> D
 			if arena != null and arena.has_method("descend_dungeon_floor"):
 				var fl_res: Dictionary = arena.descend_dungeon_floor()
 				action_note = "Remote RPC descended to Dungeon Floor %d" % int(fl_res.get("dungeon_floor", 1))
+		"claim_bounty":
+			if arena != null and arena.has_method("claim_or_advance_bounties"):
+				var bid: String = str(payload.get("bounty_id", ""))
+				var cb_res: Dictionary = arena.claim_or_advance_bounties(bid)
+				action_note = "Remote RPC claimed/advanced bounties -> %s (Total: %d)" % [str(cb_res.get("status", "ok")), int(cb_res.get("bounties_completed_count", 0))]
 		"toggle_mute":
 			if sfx_node != null and sfx_node.has_method("toggle_mute"):
 				var muted_now: bool = sfx_node.toggle_mute()
@@ -352,6 +357,8 @@ func build_telemetry_snapshot() -> Dictionary:
 		"talents": arena.talents.duplicate() if arena != null else {},
 		"total_talents_invested": int(arena.total_talents_invested) if arena != null else 0,
 		"total_vampiric_healed": int(arena.total_vampiric_healed) if arena != null else 0,
+		"bounty_tier": int(arena.bounty_tier) if arena != null else 1,
+		"bounties_completed_count": int(arena.bounties_completed_count) if arena != null else 0,
 		"sfx_muted": bool(sfx_node.muted) if sfx_node != null else false,
 		"total_sfx_played": int(sfx_node.total_sfx_played) if sfx_node != null else 0,
 		"high_wave_reached": int(loader.high_wave_reached) if loader != null else 1,
