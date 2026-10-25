@@ -262,6 +262,16 @@ func execute_remote_command(command_name: String, payload: Dictionary = {}) -> D
 			if title_screen != null and title_screen.has_method("show_title_screen"):
 				title_screen.show_title_screen()
 				action_note = "Remote RPC showed Title Screen"
+		"summon_familiar":
+			if arena != null and arena.has_method("summon_or_upgrade_familiar"):
+				var f_free: bool = bool(payload.get("force_free", false))
+				var fam_res: Dictionary = arena.summon_or_upgrade_familiar(f_free)
+				action_note = "Remote RPC summoned/upgraded Spirit Owl Familiar -> %s (Rank %d)" % [str(fam_res.get("status", "ok")), int(fam_res.get("familiar_rank", 1))]
+		"step_familiar":
+			if arena != null and arena.has_method("step_familiar"):
+				var f_dt: float = float(payload.get("delta", 1.2))
+				var sf_res: Dictionary = arena.step_familiar(f_dt)
+				action_note = "Remote RPC stepped Spirit Owl Familiar -> %d bolts, %d coins" % [int(sf_res.get("bolts_fired", 0)), int(sf_res.get("coins_fetched", 0))]
 		"toggle_mute":
 			if sfx_node != null and sfx_node.has_method("toggle_mute"):
 				var muted_now: bool = sfx_node.toggle_mute()
@@ -371,6 +381,10 @@ func build_telemetry_snapshot() -> Dictionary:
 		"bounties_completed_count": int(arena.bounties_completed_count) if arena != null else 0,
 		"title_screen_visible": bool(title_screen.visible) if title_screen != null else false,
 		"title_dismiss_count": int(title_screen.dismiss_count) if title_screen != null else 0,
+		"familiar_active": bool(arena.familiar_active) if arena != null else false,
+		"familiar_rank": int(arena.familiar_rank) if arena != null else 0,
+		"total_familiar_bolts_fired": int(arena.total_familiar_bolts_fired) if arena != null else 0,
+		"total_familiar_loot_fetched": int(arena.total_familiar_loot_fetched) if arena != null else 0,
 		"sfx_muted": bool(sfx_node.muted) if sfx_node != null else false,
 		"total_sfx_played": int(sfx_node.total_sfx_played) if sfx_node != null else 0,
 		"high_wave_reached": int(loader.high_wave_reached) if loader != null else 1,

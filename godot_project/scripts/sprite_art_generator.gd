@@ -45,6 +45,8 @@ func build_all_sprites(save_to_disk: bool = true) -> void:
 	_register_pattern("enemy_boss_1", _ENEMY_BOSS_F1, _PALETTE_BOSS, save_to_disk)
 	_register_pattern("enemy_mimic_0", _ENEMY_MIMIC_F0, _PALETTE_MIMIC, save_to_disk)
 	_register_pattern("enemy_mimic_1", _ENEMY_MIMIC_F1, _PALETTE_MIMIC, save_to_disk)
+	_register_pattern("companion_owl_0", _COMPANION_OWL_F0, _PALETTE_OWL, save_to_disk)
+	_register_pattern("companion_owl_1", _COMPANION_OWL_F1, _PALETTE_OWL, save_to_disk)
 
 	# 3. Environment Props (Runic Obelisk Pillar, Treasure Chest, Dungeon Doors, Traps, Weapons, Dungeon Cobblestone Tile)
 	_register_pattern("prop_pillar", _PROP_PILLAR, _PALETTE_PILLAR, save_to_disk)
@@ -100,6 +102,11 @@ func get_enemy_texture(enemy_name: String, is_boss: bool, anim_frame: int = 0) -
 
 func get_prop_texture(prop_key: String) -> Texture2D:
 	return textures.get(prop_key, null)
+
+
+func get_companion_texture(anim_frame: int = 0) -> Texture2D:
+	var f: int = posmod(anim_frame, 2)
+	return textures.get("companion_owl_%d" % f, null)
 
 
 func _register_pattern(key: String, rows: Array[String], palette: Dictionary, save_to_disk: bool) -> void:
@@ -816,4 +823,43 @@ const _UI_CREST_EMBLEM: Array[String] = [
 	".....OGGGGO.....",
 	"......OGGO......",
 	".......OO......."
+]
+
+const _PALETTE_OWL: Dictionary = {
+	"O": Color(0.06, 0.08, 0.14),
+	"B": Color(0.24, 0.56, 0.86),
+	"C": Color(0.45, 0.88, 1.00),
+	"W": Color(0.88, 0.96, 1.00),
+	"G": Color(1.00, 0.84, 0.28),
+	"Y": Color(1.00, 0.95, 0.55)
+}
+
+const _COMPANION_OWL_F0: Array[String] = [
+	".OO...OOOO...OO.",
+	"OBBO.OBCCCBO.OBBO",
+	"OBCCOBCWWWCBOCCBO",
+	"OBCCCBCGYGCBCCCBO",
+	".OBCCBCGGGCBCCBO.",
+	"..OBCBCWWWCBCBO..",
+	"...OBBCCCCCBBO...",
+	"....OBCWYWCBO....",
+	"....OBCWWWCBO....",
+	".....OBCCCBO.....",
+	".....OOG.GOO.....",
+	"......OO.OO......"
+]
+
+const _COMPANION_OWL_F1: Array[String] = [
+	"......OOOO......",
+	".....OBCCCBO....",
+	"....OBCWWWCBO...",
+	"...OBCGYGYGCBO..",
+	"..OBCBCGGGCBCBO.",
+	".OBCCBCWWWCBCBBO",
+	"OBCCCBBCCCBBCCCBO",
+	"OBB..OBCWYWCBO.BBO",
+	".OO..OBCWWWCBO.OO.",
+	".....OBCCCBO.....",
+	".....OOG.GOO.....",
+	"......OO.OO......"
 ]

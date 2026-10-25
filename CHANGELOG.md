@@ -1,5 +1,9 @@
 # Changelog
 
+## [2.9.0] - 2026-10-25
+- Add Companion Familiar Pet (`summon_or_upgrade_familiar()`, `get_familiar_bolt_damage()`, `step_familiar()` via **`[Z]` key**, **`"Familiar: OFF [Z]"` button**, and `"summon_familiar"` / `"step_familiar"` UDP RPCs) summoning a 2-frame animated **Ashen Spirit Owl** (`companion_owl_0.png` / `companion_owl_1.png`, bringing total exported `.png` sprites to 36) that orbits the hero, automatically fires Wisdom-scaled Arcane Bolts at nearby enemies, and swoops out (`220 px` radius) to fetch Gold Coins.
+- Expand headless Godot test suite to 56/56 assertions (`godot_project/tests/test_hud_headless.gd`).
+
 ## [2.8.0] - 2026-10-25
 - Add Dark-Fantasy Pixel-Art Title Screen & 4-Hero Pantheon Selector Overlay (`godot_project/scripts/title_screen.gd` attached to `main.tscn`) featuring animated rising cinder/ember particles, twin flickering torch sconces, `ui_crest_emblem.png` shield emblem, 4 interactive Ashen Pantheon Hero Cards (`[1]`–`[4]` with animated hero & weapon previews), and direct launch buttons (`ENTER THE CITADEL (2D ARENA) [ENTER]`, `CONTINUE SAVED RUN [F9]`, and `CHARACTER SHEET & LORE [TAB]`).
 - Add `[ESC]` key and `"Title [ESC]"` Arena button to toggle the Title Screen anytime, add `"show_title"` and `"dismiss_title"` UDP RPC commands, export `ui_crest_emblem.png` (`34` total `.png` sprites), and expand headless Godot test suite to 54/54 assertions (`godot_project/tests/test_hud_headless.gd`).

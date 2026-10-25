@@ -756,21 +756,57 @@ func _process(_delta: float) -> bool:
 		printerr("FAIL: 'show_title' or 'dismiss_title' RPC failed: show=", show_t_rpc, " dismiss=", dis_t_rpc)
 		quit(1)
 		return true
-	print("PASS [53/54]: Title Screen 'show_title' & 'dismiss_title' UDP RPCs verified (Dismiss count=%d, Arena active=%s)." % [
+	print("PASS [53/56]: Title Screen 'show_title' & 'dismiss_title' UDP RPCs verified (Dismiss count=%d, Arena active=%s)." % [
 		int(snap_after_dis.get("title_dismiss_count", 0)),
 		str(snap_after_dis.get("arena_active", false))
 	])
 
-	# 54. Verify Failure Mode / Missing File Boundary Error Banner
+	# 54. Verify Companion Familiar Pet ([Z] Key / summon_or_upgrade_familiar: Ashen Spirit Owl Orbit, Bolt Volley & Coin Fetch)
+	arena.dummies[0]["alive"] = true
+	arena.dummies[0]["hp"] = 60
+	arena.dummies[0]["pos"] = Vector2(520.0, 350.0)
+	arena.coin_drops.clear()
+	arena.spawn_coin_drop(arena.player_pos + Vector2(185.0, 0.0), 20, false)
+	var gold_pre_owl: int = arena.gold_coins
+	var sum_res: Dictionary = arena.summon_or_upgrade_familiar()
+	var step_owl_res: Dictionary = arena.step_familiar(1.25)
+	if not arena.familiar_active or arena.familiar_rank != 1 or arena.sprite_gen.textures.size() < 36 or int(step_owl_res.get("bolts_fired", 0)) < 1 or int(step_owl_res.get("coins_fetched", 0)) < 1 or arena.gold_coins != gold_pre_owl + 20:
+		printerr("FAIL: Companion Spirit Owl [Z] did not summon, fire arcane bolt, or fetch distant gold coin: sum=", sum_res, " step=", step_owl_res)
+		quit(1)
+		return true
+	print("PASS [54/56]: Ashen Spirit Owl Companion Familiar [Z] verified (Rank 1, %d Arcane Dmg, %d bolts fired, %d coin fetched -> +%dg Gold)." % [
+		arena.get_familiar_bolt_damage(),
+		arena.total_familiar_bolts_fired,
+		arena.total_familiar_loot_fetched,
+		20
+	])
+
+	# 55. Verify Companion Familiar Rank 2 Upgrade & "summon_familiar" / "step_familiar" UDP RPCs
+	var dmg_r1: int = arena.get_familiar_bolt_damage()
+	var up_owl_rpc: Dictionary = udp_bridge.execute_remote_command("summon_familiar", {"force_free": true})
+	var step_owl_rpc: Dictionary = udp_bridge.execute_remote_command("step_familiar", {"delta": 1.25})
+	var owl_snap: Dictionary = step_owl_rpc.get("snapshot", {})
+	var dmg_r2: int = arena.get_familiar_bolt_damage()
+	if arena.familiar_rank != 2 or dmg_r2 <= dmg_r1 or int(owl_snap.get("familiar_rank", 0)) != 2 or int(owl_snap.get("total_familiar_bolts_fired", 0)) < 2:
+		printerr("FAIL: Spirit Owl Rank 2 upgrade or 'summon_familiar' / 'step_familiar' RPC failed: up=", up_owl_rpc, " step=", step_owl_rpc)
+		quit(1)
+		return true
+	print("PASS [55/56]: Spirit Owl Rank 2 Upgrade & UDP RPCs verified (Bolt Dmg %d->%d, Total Owl Bolts=%d)." % [
+		dmg_r1,
+		dmg_r2,
+		int(owl_snap.get("total_familiar_bolts_fired", 0))
+	])
+
+	# 56. Verify Failure Mode / Missing File Boundary Error Banner
 	hud.toggle_arena_mode()
 	var missing_res: Dictionary = loader.load_character_data("res://data/NonExistentChaosFile.json")
 	if not missing_res.is_empty() or not hud.error_banner.visible:
 		printerr("FAIL: Missing file error banner did not trigger.")
 		quit(1)
 		return true
-	print("PASS [54/54]: Missing-file error state verified -> ", hud.error_banner.text)
+	print("PASS [56/56]: Missing-file error state verified -> ", hud.error_banner.text)
 
-	print("=== ALL 54 HEADLESS HUD, ARENA, ROSTER, ULTIMATES, BOSS, RELICS, SFX, POTIONS, PILLARS, CRITS, ENEMY BOLTS, PARRY, HAZARDS, FRENZY, AI PILOT, PIXEL-ART SPRITES, DUNGEON CRAWLER, BOSS ENRAGE, ELEMENTAL INFUSIONS, MERCHANT SHOP, SPIKE TRAPS, MIMICS, RESPAWN [R], TALENT TREE [T], FLOOR DESCENT [X], BOUNTY BOARD [J], TITLE SCREEN, UDP & SAVE/LOAD TESTS PASSED ===")
+	print("=== ALL 56 HEADLESS HUD, ARENA, ROSTER, ULTIMATES, BOSS, RELICS, SFX, POTIONS, PILLARS, CRITS, ENEMY BOLTS, PARRY, HAZARDS, FRENZY, AI PILOT, PIXEL-ART SPRITES, DUNGEON CRAWLER, BOSS ENRAGE, ELEMENTAL INFUSIONS, MERCHANT SHOP, SPIKE TRAPS, MIMICS, RESPAWN [R], TALENT TREE [T], FLOOR DESCENT [X], BOUNTY BOARD [J], TITLE SCREEN, SPIRIT OWL FAMILIAR [Z], UDP & SAVE/LOAD TESTS PASSED ===")
 	_main_instance.queue_free()
 	quit(0)
 	return true

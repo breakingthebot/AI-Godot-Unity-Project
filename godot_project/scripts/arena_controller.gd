@@ -174,6 +174,20 @@ var total_vampiric_healed: int = 0
 var bounties: Array[Dictionary] = []
 var bounty_tier: int = 1
 var bounties_completed_count: int = 0
+var familiar_active: bool = false
+var familiar_rank: int = 0
+var familiar_pos: Vector2 = Vector2(220.0, 302.0)
+var familiar_orbit_angle: float = 0.0
+var _familiar_fire_accum: float = 0.0
+var total_familiar_bolts_fired: int = 0
+var total_familiar_loot_fetched: int = 0
+
+const FAMILIAR_ORBIT_RADIUS: float = 48.0
+const FAMILIAR_ORBIT_SPEED: float = 2.6
+const FAMILIAR_BASE_FIRE_INTERVAL: float = 1.1
+const FAMILIAR_BASE_DAMAGE: int = 9
+const FAMILIAR_UPGRADE_GOLD_COST: int = 30
+const FAMILIAR_LOOT_FETCH_RADIUS: float = 220.0
 
 var _ui_layer: CanvasLayer
 var _status_label: Label
@@ -183,6 +197,7 @@ var _ai_btn: Button
 var _stance_btn: Button
 var _talent_btn: Button
 var _bounty_btn: Button
+var _familiar_btn: Button
 var _sfx_btn: Button
 
 
@@ -1633,6 +1648,168 @@ func claim_or_advance_bounties(force_complete_id: String = "") -> Dictionary:
 	}
 
 
+## Returns the Ashen Spirit Owl's arcane bolt damage (scales with Owl Rank & Hero Wisdom modifier).
+func get_familiar_bolt_damage() -> int:
+	var rank_bonus: int = maxi(0, familiar_rank - 1) * 4
+	var wis_mod: int = 0
+	if loader != null and not loader.current_data.is_empty() and loader.has_method("get_attribute_modifier"):
+		var attrs: Dictionary = loader.current_data.get("attributes", {})
+		var wis_score: int = int(attrs.get("wisdom", 10))
+		wis_mod = maxi(0, int(loader.get_attribute_modifier(wis_score)))
+	return FAMILIAR_BASE_DAMAGE + rank_bonus + wis_mod * 2
+
+
+## Summons the Ashen Spirit Owl Companion Familiar on first press ([Z] Key / "Familiar [Z]" Button / "summon_familiar" RPC), or upgrades its Rank.
+func summon_or_upgrade_familiar(force_free: bool = false) -> Dictionary:
+	if not familiar_active:
+		familiar_active = true
+		familiar_rank = 1
+		familiar_orbit_angle = -PI * 0.5
+		familiar_pos = player_pos + Vector2(cos(familiar_orbit_angle), sin(familiar_orbit_angle)) * FAMILIAR_ORBIT_RADIUS
+		_familiar_fire_accum = 0.0
+		if _familiar_btn != null:
+			_familiar_btn.text = "Familiar R%d [Z]" % familiar_rank
+		spawn_particle_burst(familiar_pos, Color(0.42, 0.92, 1.0), 18, 1.25)
+		spawn_floating_text(familiar_pos + Vector2(0, -18), "SPIRIT OWL SUMMONED! [Z]", Color(0.45, 0.95, 1.0), true)
+		_play_sfx("relic_loot")
+		var msg := "[Companion Summoned! [Z]] Ashen Spirit Owl (Rank 1, %d Arcane Dmg) now orbits your hero, firing bolts & fetching Gold Coins!" % get_familiar_bolt_damage()
+		if _combat_banner != null:
+			_combat_banner.text = msg
+		arena_combat_event.emit(msg)
+		_refresh_status_bar()
+		queue_redraw()
+		return {
+			"status": "summoned",
+			"familiar_active": familiar_active,
+			"familiar_rank": familiar_rank,
+			"bolt_damage": get_familiar_bolt_damage(),
+			"message": msg
+		}
+
+	# Already active -> Upgrade Owl Rank if force_free or player has >= 30g Gold; otherwise fire an immediate Owl Volley!
+	if not force_free and gold_coins < FAMILIAR_UPGRADE_GOLD_COST:
+		var volley_res := step_familiar(FAMILIAR_BASE_FIRE_INTERVAL)
+		var pulse_msg := "[Spirit Owl Volley! [Z]] Owl fired an immediate Arcane Bolt (Need %dg Gold to upgrade to Rank %d, have %dg)!" % [
+			FAMILIAR_UPGRADE_GOLD_COST,
+			familiar_rank + 1,
+			gold_coins
+		]
+		if _combat_banner != null:
+			_combat_banner.text = pulse_msg
+		return {
+			"status": "volley_triggered",
+			"familiar_active": familiar_active,
+			"familiar_rank": familiar_rank,
+			"bolt_damage": get_familiar_bolt_damage(),
+			"bolts_fired": int(volley_res.get("bolts_fired", 0)),
+			"message": pulse_msg
+		}
+
+	if not force_free:
+		gold_coins -= FAMILIAR_UPGRADE_GOLD_COST
+	familiar_rank += 1
+	if _familiar_btn != null:
+		_familiar_btn.text = "Familiar R%d [Z]" % familiar_rank
+	spawn_particle_burst(familiar_pos, Color(1.0, 0.88, 0.28), 20, 1.35)
+	spawn_floating_text(familiar_pos + Vector2(0, -20), "OWL RANK %d! (%d DMG)" % [familiar_rank, get_familiar_bolt_damage()], Color(1.0, 0.92, 0.32), true)
+	_play_sfx("level_up")
+	var up_msg := "[Companion Upgraded -> Rank %d! [Z]] Ashen Spirit Owl now deals %d Arcane Dmg & fires faster!" % [
+		familiar_rank,
+		get_familiar_bolt_damage()
+	]
+	if _combat_banner != null:
+		_combat_banner.text = up_msg
+	arena_combat_event.emit(up_msg)
+	_refresh_status_bar()
+	queue_redraw()
+	return {
+		"status": "upgraded",
+		"familiar_active": familiar_active,
+		"familiar_rank": familiar_rank,
+		"bolt_damage": get_familiar_bolt_damage(),
+		"gold_remaining": gold_coins,
+		"message": up_msg
+	}
+
+
+## Steps the Ashen Spirit Owl Companion Familiar: orbits the hero, swoops to fetch Gold Coins & Relic Chests, and fires Arcane Bolts at enemies.
+func step_familiar(delta: float) -> Dictionary:
+	if not familiar_active:
+		return {"active": false, "bolts_fired": 0, "coins_fetched": 0}
+
+	familiar_orbit_angle = fposmod(familiar_orbit_angle + FAMILIAR_ORBIT_SPEED * delta, TAU)
+	familiar_pos = player_pos + Vector2(cos(familiar_orbit_angle), sin(familiar_orbit_angle)) * FAMILIAR_ORBIT_RADIUS
+
+	# 1. Autonomous Gold Coin Loot-Fetch within FAMILIAR_LOOT_FETCH_RADIUS
+	var coins_fetched_now: int = 0
+	var remaining_coins: Array[Dictionary] = []
+	for coin in coin_drops:
+		var c_pos: Vector2 = coin.get("pos", Vector2.ZERO)
+		var dist_owl: float = c_pos.distance_to(familiar_pos)
+		var dist_hero: float = c_pos.distance_to(player_pos)
+		if dist_owl <= FAMILIAR_LOOT_FETCH_RADIUS or dist_hero <= FAMILIAR_LOOT_FETCH_RADIUS:
+			var amt: int = int(coin.get("amount", ENEMY_GOLD_REWARD))
+			if not bool(coin.get("credited", false)):
+				gold_coins += amt
+				total_gold_earned += amt
+			coins_fetched_now += 1
+			total_familiar_loot_fetched += 1
+			spawn_particle_burst(familiar_pos, Color(0.45, 0.96, 1.0), 8, 0.9)
+			spawn_floating_text(familiar_pos + Vector2(0, -14), "OWL FETCH +%dg!" % amt, Color(0.55, 0.96, 1.0), false)
+			_play_sfx("relic_loot")
+		else:
+			remaining_coins.append(coin)
+	if coins_fetched_now > 0:
+		coin_drops = remaining_coins
+		_refresh_status_bar()
+
+	# 2. Autonomous Arcane Bolt Volley at the nearest alive enemy
+	_familiar_fire_accum += delta
+	var fire_interval: float = maxf(0.45, FAMILIAR_BASE_FIRE_INTERVAL - float(maxi(0, familiar_rank - 1)) * 0.16)
+	var bolts_fired_now: int = 0
+	if _familiar_fire_accum >= fire_interval:
+		_familiar_fire_accum -= fire_interval
+		var nearest_idx: int = -1
+		var nearest_dist: float = 999999.0
+		for i in range(dummies.size()):
+			if not bool(dummies[i].get("alive", true)):
+				continue
+			var d_pos: Vector2 = dummies[i].get("pos", Vector2.ZERO)
+			var dist := familiar_pos.distance_to(d_pos)
+			if dist < nearest_dist:
+				nearest_dist = dist
+				nearest_idx = i
+		if nearest_idx >= 0:
+			var target_pos: Vector2 = dummies[nearest_idx].get("pos", Vector2.ZERO)
+			var shot_dir: Vector2 = (target_pos - familiar_pos).normalized()
+			if shot_dir.length_squared() < 0.001:
+				shot_dir = Vector2.RIGHT
+			var owl_dmg: int = get_familiar_bolt_damage()
+			arrows.append({
+				"pos": familiar_pos + shot_dir * 12.0,
+				"vel": shot_dir * (ARROW_SPEED * 1.08),
+				"damage": owl_dmg,
+				"is_crit": false,
+				"is_familiar_bolt": true,
+				"ttl": 1.8
+			})
+			bolts_fired_now += 1
+			total_familiar_bolts_fired += 1
+			spawn_particle_burst(familiar_pos, Color(0.42, 0.92, 1.0), 6, 0.85)
+			_play_sfx("shoot")
+
+	queue_redraw()
+	return {
+		"active": familiar_active,
+		"familiar_rank": familiar_rank,
+		"familiar_pos": familiar_pos,
+		"bolts_fired": bolts_fired_now,
+		"coins_fetched": coins_fetched_now,
+		"total_familiar_bolts_fired": total_familiar_bolts_fired,
+		"total_familiar_loot_fetched": total_familiar_loot_fetched
+	}
+
+
 func _build_arena_overlay() -> void:
 	_ui_layer = CanvasLayer.new()
 	_ui_layer.name = "ArenaOverlay"
@@ -1753,6 +1930,12 @@ func _build_arena_overlay() -> void:
 	_bounty_btn.text = "Bounties (T%d) [J]" % bounty_tier
 	_bounty_btn.pressed.connect(func() -> void: claim_or_advance_bounties())
 	hbox.add_child(_bounty_btn)
+
+	_familiar_btn = Button.new()
+	_familiar_btn.name = "FamiliarSummonButton"
+	_familiar_btn.text = "Familiar: OFF [Z]"
+	_familiar_btn.pressed.connect(func() -> void: summon_or_upgrade_familiar())
+	hbox.add_child(_familiar_btn)
 
 	_sfx_btn = Button.new()
 	_sfx_btn.name = "SfxMuteButton"
@@ -2834,6 +3017,8 @@ func _unhandled_input(event: InputEvent) -> void:
 				descend_dungeon_floor()
 			elif ke.keycode == KEY_J:
 				claim_or_advance_bounties()
+			elif ke.keycode == KEY_Z:
+				summon_or_upgrade_familiar()
 
 
 func _process(delta: float) -> void:
@@ -2896,10 +3081,12 @@ func _process(delta: float) -> void:
 	if ai_pilot_active:
 		step_ai_pilot(delta)
 
-	# Step Environmental Hazard & Sanctuary Zones, Spike Traps, Elemental Statuses, and Coin Drops
+	# Step Environmental Hazard & Sanctuary Zones, Spike Traps, Elemental Statuses, Familiar Owl, and Coin Drops
 	step_hazard_zones(delta)
 	step_spike_traps(delta)
 	step_elemental_statuses(delta)
+	if familiar_active:
+		step_familiar(delta)
 	step_coin_drops(delta)
 
 	# 2. Wave Survival / Awakened Mimic Enemy AI Pursuit & Contact Check
@@ -3259,6 +3446,19 @@ func _draw() -> void:
 			draw_string(font, player_pos + Vector2(-46, -92), "[AI AUTO-PILOT: %s]" % ai_last_action.to_upper(), HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.35, 0.98, 0.85))
 		if elemental_stance != "none":
 			draw_string(font, player_pos + Vector2(-48, -106), "[INFUSION: %s]" % elemental_stance.to_upper(), HORIZONTAL_ALIGNMENT_LEFT, -1, 11, get_elemental_stance_color())
+
+	# 5B. Companion Familiar Pet (Ashen Spirit Owl [Z])
+	if familiar_active:
+		draw_line(player_pos, familiar_pos, Color(0.42, 0.92, 1.0, 0.28), 1.5)
+		draw_circle(familiar_pos + Vector2(0, 12), 10.0, Color(0.02, 0.04, 0.08, 0.45))
+		draw_arc(familiar_pos, 16.0 + sin(_anim_time * 8.0) * 2.0, 0.0, TAU, 24, Color(0.45, 0.95, 1.0, 0.78), 1.8)
+		var owl_tex: Texture2D = sprite_gen.get_companion_texture(anim_frame) if sprite_gen.has_method("get_companion_texture") else null
+		if owl_tex != null:
+			draw_texture_rect(owl_tex, Rect2(familiar_pos - Vector2(18, 18), Vector2(36, 36)), false)
+		else:
+			draw_circle(familiar_pos, 11.0, Color(0.45, 0.92, 1.0))
+		if font != null:
+			draw_string(font, familiar_pos + Vector2(-24, -20), "OWL R%d" % familiar_rank, HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(0.55, 0.96, 1.0))
 
 	# 6. Animated Pixel-Art Monsters & Towering Boss Sprites
 	for dummy in dummies:
