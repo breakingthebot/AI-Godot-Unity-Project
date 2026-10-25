@@ -1771,6 +1771,19 @@ func _build_arena_overlay() -> void:
 	back_btn.pressed.connect(func() -> void: request_hud_toggle.emit())
 	hbox.add_child(back_btn)
 
+	var title_btn := Button.new()
+	title_btn.name = "TitleMenuButton"
+	title_btn.text = "Title [ESC]"
+	title_btn.pressed.connect(_on_show_title_screen)
+	hbox.add_child(title_btn)
+
+
+func _on_show_title_screen() -> void:
+	if get_parent() != null:
+		var ts := get_parent().get_node_or_null("TitleScreen")
+		if ts != null and ts.has_method("show_title_screen"):
+			ts.show_title_screen()
+
 
 ## Enables or disables the 2D Arena rendering and input processing.
 func set_arena_active(is_active: bool) -> void:
@@ -1778,6 +1791,10 @@ func set_arena_active(is_active: bool) -> void:
 	visible = is_active
 	if _ui_layer != null:
 		_ui_layer.visible = is_active
+	if is_active and get_parent() != null:
+		var ts := get_parent().get_node_or_null("TitleScreen")
+		if ts != null and ts.visible and ts.has_method("dismiss_title_screen"):
+			ts.dismiss_title_screen()
 	_refresh_status_bar()
 	queue_redraw()
 

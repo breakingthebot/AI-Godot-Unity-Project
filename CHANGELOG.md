@@ -1,5 +1,9 @@
 # Changelog
 
+## [2.8.0] - 2026-10-25
+- Add Dark-Fantasy Pixel-Art Title Screen & 4-Hero Pantheon Selector Overlay (`godot_project/scripts/title_screen.gd` attached to `main.tscn`) featuring animated rising cinder/ember particles, twin flickering torch sconces, `ui_crest_emblem.png` shield emblem, 4 interactive Ashen Pantheon Hero Cards (`[1]`–`[4]` with animated hero & weapon previews), and direct launch buttons (`ENTER THE CITADEL (2D ARENA) [ENTER]`, `CONTINUE SAVED RUN [F9]`, and `CHARACTER SHEET & LORE [TAB]`).
+- Add `[ESC]` key and `"Title [ESC]"` Arena button to toggle the Title Screen anytime, add `"show_title"` and `"dismiss_title"` UDP RPC commands, export `ui_crest_emblem.png` (`34` total `.png` sprites), and expand headless Godot test suite to 54/54 assertions (`godot_project/tests/test_hud_headless.gd`).
+
 ## [2.7.0] - 2026-10-25
 - Add Dungeon Bounty Board & Quest Log Tracker (`_init_bounties()`, `evaluate_bounty_progress()`, `claim_or_advance_bounties()` via **`[J]` key**, **`"Bounties (T1) [J]"` button**, and `"claim_bounty"` UDP RPC) tracking 3 live dungeon objectives: **Slayer's Contract** (defeat monsters for `+35g` Gold & `+1 Talent Point`), **Aegis Deflector** (parry projectiles with `[F]` for `+30g` Gold & `+1 Healing Elixir`), and **Cartographer's Oath** (explore dungeon rooms for `+40g` Gold & `+1 Guaranteed Relic`), plus a `+50g` & `+1 Talent Point` Tier Clear Bonus when advancing to Tier 2+.
 - Add Top-Left Quest & Bounty Tracker Overlay (`_draw_bounty_tracker()`) and wooden `prop_bounty_board.png` sprite in `sprite_art_generator.gd` (bringing total exported `.png` sprites to 33), and expand headless Godot test suite to 52/52 assertions (`godot_project/tests/test_hud_headless.gd`).

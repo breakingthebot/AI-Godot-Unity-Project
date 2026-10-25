@@ -24,6 +24,7 @@ var loader: Node = null
 var hud: Node = null
 var arena: Node = null
 var sfx_node: Node = null
+var title_screen: Node = null
 
 var _udp: PacketPeerUDP = PacketPeerUDP.new()
 var _is_listening: bool = false
@@ -51,6 +52,7 @@ func _bind_sibling_nodes() -> void:
 	hud = parent.get_node_or_null("CharacterSheetHUD")
 	arena = parent.get_node_or_null("Arena")
 	sfx_node = parent.get_node_or_null("ProceduralSfx")
+	title_screen = parent.get_node_or_null("TitleScreen")
 
 
 ## Binds the loopback UDP listener on the requested port (or fallback port if busy).
@@ -252,6 +254,14 @@ func execute_remote_command(command_name: String, payload: Dictionary = {}) -> D
 				var bid: String = str(payload.get("bounty_id", ""))
 				var cb_res: Dictionary = arena.claim_or_advance_bounties(bid)
 				action_note = "Remote RPC claimed/advanced bounties -> %s (Total: %d)" % [str(cb_res.get("status", "ok")), int(cb_res.get("bounties_completed_count", 0))]
+		"dismiss_title":
+			if title_screen != null and title_screen.has_method("enter_citadel_arena"):
+				var dt_res: Dictionary = title_screen.enter_citadel_arena()
+				action_note = "Remote RPC dismissed Title Screen -> mode=%s" % str(dt_res.get("mode", "arena"))
+		"show_title":
+			if title_screen != null and title_screen.has_method("show_title_screen"):
+				title_screen.show_title_screen()
+				action_note = "Remote RPC showed Title Screen"
 		"toggle_mute":
 			if sfx_node != null and sfx_node.has_method("toggle_mute"):
 				var muted_now: bool = sfx_node.toggle_mute()
@@ -359,6 +369,8 @@ func build_telemetry_snapshot() -> Dictionary:
 		"total_vampiric_healed": int(arena.total_vampiric_healed) if arena != null else 0,
 		"bounty_tier": int(arena.bounty_tier) if arena != null else 1,
 		"bounties_completed_count": int(arena.bounties_completed_count) if arena != null else 0,
+		"title_screen_visible": bool(title_screen.visible) if title_screen != null else false,
+		"title_dismiss_count": int(title_screen.dismiss_count) if title_screen != null else 0,
 		"sfx_muted": bool(sfx_node.muted) if sfx_node != null else false,
 		"total_sfx_played": int(sfx_node.total_sfx_played) if sfx_node != null else 0,
 		"high_wave_reached": int(loader.high_wave_reached) if loader != null else 1,

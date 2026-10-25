@@ -728,21 +728,49 @@ func _process(_delta: float) -> bool:
 		printerr("FAIL: Bounty Board Tier 2 refresh or 'claim_bounty' RPC failed: tier2=", tier2_rpc, " slayer=", force_slayer_rpc)
 		quit(1)
 		return true
-	print("PASS [51/52]: Bounty Board Tier Escalation verified -> Tier %d unlocked & 'slayer' RPC claimed (Total Bounties Completed: %d)." % [
+	print("PASS [51/54]: Bounty Board Tier Escalation verified -> Tier %d unlocked & 'slayer' RPC claimed (Total Bounties Completed: %d)." % [
 		arena.bounty_tier,
 		arena.bounties_completed_count
 	])
 
-	# 52. Verify Failure Mode / Missing File Boundary Error Banner
+	# 52. Verify Dark-Fantasy Title Screen Overlay, Citadel Crest Emblem Sprite (34 PNGs) & 4-Hero Card Selector
+	var title_screen: Node = _main_instance.get_node_or_null("TitleScreen")
+	if title_screen == null or title_screen.hero_cards.size() != 4 or title_screen.crest_icon == null or title_screen.crest_icon.texture == null or arena.sprite_gen.textures.size() < 34:
+		printerr("FAIL: TitleScreen node, 4 Hero Cards, or ui_crest_emblem.png sprite missing: title=", title_screen)
+		quit(1)
+		return true
+	var pick_nyx: Dictionary = title_screen.select_hero_on_title(2)
+	if str(pick_nyx.get("character_id", "")) != "ash_002" or int(title_screen.selected_slot) != 2 or str(loader.current_data.get("character_id", "")) != "ash_002":
+		printerr("FAIL: TitleScreen select_hero_on_title(2) did not select Nyx Weaver (ash_002): ", pick_nyx)
+		quit(1)
+		return true
+	title_screen.select_hero_on_title(0)
+	print("PASS [52/54]: Dark-Fantasy Title Screen & 4-Hero Card Selector verified (ui_crest_emblem.png loaded, %d total sprites, Hero Card selection synced)." % arena.sprite_gen.textures.size())
+
+	# 53. Verify Title Screen "show_title" & "dismiss_title" UDP RPC Commands -> Launch into 2D Arena
+	var show_t_rpc: Dictionary = udp_bridge.execute_remote_command("show_title", {})
+	var vis_after_show: bool = bool(show_t_rpc.get("snapshot", {}).get("title_screen_visible", false))
+	var dis_t_rpc: Dictionary = udp_bridge.execute_remote_command("dismiss_title", {})
+	var snap_after_dis: Dictionary = dis_t_rpc.get("snapshot", {})
+	if not vis_after_show or bool(snap_after_dis.get("title_screen_visible", true)) or not bool(snap_after_dis.get("arena_active", false)) or int(snap_after_dis.get("title_dismiss_count", 0)) < 1:
+		printerr("FAIL: 'show_title' or 'dismiss_title' RPC failed: show=", show_t_rpc, " dismiss=", dis_t_rpc)
+		quit(1)
+		return true
+	print("PASS [53/54]: Title Screen 'show_title' & 'dismiss_title' UDP RPCs verified (Dismiss count=%d, Arena active=%s)." % [
+		int(snap_after_dis.get("title_dismiss_count", 0)),
+		str(snap_after_dis.get("arena_active", false))
+	])
+
+	# 54. Verify Failure Mode / Missing File Boundary Error Banner
 	hud.toggle_arena_mode()
 	var missing_res: Dictionary = loader.load_character_data("res://data/NonExistentChaosFile.json")
 	if not missing_res.is_empty() or not hud.error_banner.visible:
 		printerr("FAIL: Missing file error banner did not trigger.")
 		quit(1)
 		return true
-	print("PASS [52/52]: Missing-file error state verified -> ", hud.error_banner.text)
+	print("PASS [54/54]: Missing-file error state verified -> ", hud.error_banner.text)
 
-	print("=== ALL 52 HEADLESS HUD, ARENA, ROSTER, ULTIMATES, BOSS, RELICS, SFX, POTIONS, PILLARS, CRITS, ENEMY BOLTS, PARRY, HAZARDS, FRENZY, AI PILOT, PIXEL-ART SPRITES, DUNGEON CRAWLER, BOSS ENRAGE, ELEMENTAL INFUSIONS, MERCHANT SHOP, SPIKE TRAPS, MIMICS, RESPAWN [R], TALENT TREE [T], FLOOR DESCENT [X], BOUNTY BOARD [J], UDP & SAVE/LOAD TESTS PASSED ===")
+	print("=== ALL 54 HEADLESS HUD, ARENA, ROSTER, ULTIMATES, BOSS, RELICS, SFX, POTIONS, PILLARS, CRITS, ENEMY BOLTS, PARRY, HAZARDS, FRENZY, AI PILOT, PIXEL-ART SPRITES, DUNGEON CRAWLER, BOSS ENRAGE, ELEMENTAL INFUSIONS, MERCHANT SHOP, SPIKE TRAPS, MIMICS, RESPAWN [R], TALENT TREE [T], FLOOR DESCENT [X], BOUNTY BOARD [J], TITLE SCREEN, UDP & SAVE/LOAD TESTS PASSED ===")
 	_main_instance.queue_free()
 	quit(0)
 	return true
