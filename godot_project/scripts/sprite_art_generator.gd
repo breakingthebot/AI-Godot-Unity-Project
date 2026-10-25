@@ -43,12 +43,16 @@ func build_all_sprites(save_to_disk: bool = true) -> void:
 	_register_pattern("enemy_sentinel_1", _ENEMY_SENTINEL_F1, _PALETTE_SENTINEL, save_to_disk)
 	_register_pattern("enemy_boss_0", _ENEMY_BOSS_F0, _PALETTE_BOSS, save_to_disk)
 	_register_pattern("enemy_boss_1", _ENEMY_BOSS_F1, _PALETTE_BOSS, save_to_disk)
+	_register_pattern("enemy_mimic_0", _ENEMY_MIMIC_F0, _PALETTE_MIMIC, save_to_disk)
+	_register_pattern("enemy_mimic_1", _ENEMY_MIMIC_F1, _PALETTE_MIMIC, save_to_disk)
 
-	# 3. Environment Props (Runic Obelisk Pillar, Treasure Chest, Dungeon Doors, Weapons, Dungeon Cobblestone Tile)
+	# 3. Environment Props (Runic Obelisk Pillar, Treasure Chest, Dungeon Doors, Traps, Weapons, Dungeon Cobblestone Tile)
 	_register_pattern("prop_pillar", _PROP_PILLAR, _PALETTE_PILLAR, save_to_disk)
 	_register_pattern("prop_chest", _PROP_CHEST, _PALETTE_CHEST, save_to_disk)
 	_register_pattern("prop_door_open", _PROP_DOOR_OPEN, _PALETTE_DOOR, save_to_disk)
 	_register_pattern("prop_door_locked", _PROP_DOOR_LOCKED, _PALETTE_DOOR, save_to_disk)
+	_register_pattern("prop_spike_trap_off", _PROP_SPIKE_TRAP_OFF, _PALETTE_TRAP, save_to_disk)
+	_register_pattern("prop_spike_trap_on", _PROP_SPIKE_TRAP_ON, _PALETTE_TRAP, save_to_disk)
 	_register_pattern("npc_merchant", _NPC_MERCHANT, _PALETTE_MERCHANT, save_to_disk)
 	_register_pattern("prop_coin", _PROP_COIN, _PALETTE_MERCHANT, save_to_disk)
 	_register_pattern("weapon_bow", _WEAPON_BOW, _PALETTE_WEAPON, save_to_disk)
@@ -82,6 +86,8 @@ func get_enemy_texture(enemy_name: String, is_boss: bool, anim_frame: int = 0) -
 	var f: int = posmod(anim_frame, 2)
 	if is_boss:
 		return textures.get("enemy_boss_%d" % f, null)
+	if enemy_name.contains("Mimic"):
+		return textures.get("enemy_mimic_%d" % f, null)
 	if enemy_name.contains("Scout") or enemy_name.contains("Imp"):
 		return textures.get("enemy_scout_%d" % f, null)
 	if enemy_name.contains("Stalker"):
@@ -679,4 +685,82 @@ const _PROP_COIN: Array[String] = [
 	".OGGGGO.",
 	"..OOOO..",
 	"........"
+]
+
+const _PALETTE_MIMIC := {
+	"O": Color(0.08, 0.04, 0.03),
+	"W": Color(0.48, 0.24, 0.12), # Dark mimic oak
+	"G": Color(0.95, 0.78, 0.22), # Gold trim
+	"F": Color(0.98, 0.96, 0.88), # Jagged ivory fangs
+	"R": Color(0.98, 0.22, 0.28), # Glowing crimson eyes
+	"T": Color(0.85, 0.25, 0.68), # Lashing mimic tongue
+	"M": Color(0.24, 0.06, 0.10), # Dark maw interior
+}
+
+const _ENEMY_MIMIC_F0: Array[String] = [
+	"..OOOOOOOOOOOO..",
+	".OGGWWWWWWWWGGO.",
+	"OGWWRRWWWWWRRWGO",
+	"OGWWWWWWWWWWWWGO",
+	"OOFMFMFMFMFMFMOO",
+	"OMFMMTTTTTTMMFMO",
+	"OMFMFTTTTTTFMFMO",
+	"OOGWWWWWWWWWWGOO",
+	"OGWWGGGGGGGGWWGO",
+	"OGGWWWWWWWWWWGGO",
+	".OOOOOOOOOOOOOO.",
+	"................"
+]
+
+const _ENEMY_MIMIC_F1: Array[String] = [
+	".OOOOOOOOOOOOOO.",
+	"OGGWWWWWWWWWWGGO",
+	"OGWWRRWWWWWRRWGO",
+	"OOFMFMFMFMFMFMOO",
+	"OMMMMMMMMMMMMMMO",
+	"OMMMTTTTTTTTMMMO",
+	"OMFMFTTTTTTFMFMO",
+	"OOFMFMFMFMFMFMOO",
+	"OGWWGGGGGGGGWWGO",
+	"OGGWWWWWWWWWWGGO",
+	".OOOWW....WWOOO.",
+	"....OO....OO...."
+]
+
+const _PALETTE_TRAP := {
+	"O": Color(0.06, 0.07, 0.09),
+	"D": Color(0.16, 0.19, 0.24), # Recessed iron plate
+	"M": Color(0.32, 0.36, 0.44), # Metal rim
+	"S": Color(0.84, 0.89, 0.96), # Gleaming steel spike
+	"R": Color(0.92, 0.22, 0.24), # Blood-tipped spike point
+}
+
+const _PROP_SPIKE_TRAP_OFF: Array[String] = [
+	"..OOOOOOOOOOOO..",
+	".OMMDDDDDDDDMMO.",
+	"OMDDODDOODDODDMO",
+	"OMDOOODOODOOODMO",
+	"OMDDODDOODDODDMO",
+	"OMDDDDDDDDDDDDMO",
+	"OMDDODDOODDODDMO",
+	"OMDOOODOODOOODMO",
+	"OMDDODDOODDODDMO",
+	"OMDDDDDDDDDDDDMO",
+	".OMMDDDDDDDDMMO.",
+	"..OOOOOOOOOOOO.."
+]
+
+const _PROP_SPIKE_TRAP_ON: Array[String] = [
+	"..OORRO..OORRO..",
+	".OMRSSO..OSSRMO.",
+	"OMDSSSOOOOSSSDMO",
+	"OMDDSSOOOOSSDDMO",
+	"OMRROOORROOORRMO",
+	"OMSSO.OSSO.OSSMO",
+	"OMSSOOOSSOOOSSMO",
+	"OMDDSSO..OSSDDMO",
+	"OMDDSSO..OSSDDMO",
+	"OMDDDDDDDDDDDDMO",
+	".OMMDDDDDDDDMMO.",
+	"..OOOOOOOOOOOO.."
 ]

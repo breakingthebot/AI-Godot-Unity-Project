@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.5.0] - 2026-10-25
+- Add permanent enemy defeat (`hp = 0`, `alive = false` in all arena modes without auto-respawning) and on-demand enemy respawn (`respawn_enemies()` via **`[R]` key**, **`"Respawn [R]"` button**, and `"respawn_enemies"` UDP RPC).
+- Add Procedural Cyclic Floor Spike Traps (`_init_spike_traps()`, `trigger_spike_trap_cycle()`, `step_spike_traps()`, `"trigger_spike_trap"` UDP RPC) toggling every `2.0s` between retracted and armed states and dealing `12` piercing damage to overlapping enemies (`6` armor-mitigated bleed damage to heroes).
+- Add Chest Mimic Encounters (`spawn_mimic_chest()`, `Relic Mimic [ELITE]` with `85 HP` awakening on chest interaction and dropping `+45g` Gold Coins plus a guaranteed Relic upon defeat).
+- Add `enemy_mimic_0.png`, `enemy_mimic_1.png`, `prop_spike_trap_off.png`, and `prop_spike_trap_on.png` pixel-art sprites to `sprite_art_generator.gd` (bringing total exported `.png` sprites to 31) and expand headless Godot test suite to 48/48 assertions (`godot_project/tests/test_hud_headless.gd`).
+
 ## [2.4.0] - 2026-10-25
 - Add Gold Coin Drop Economy (`spawn_coin_drop()`, `step_coin_drops()`, `+20g` per enemy kill, `+60g` per Boss kill, and `160 px` magnetized coin pickup) and Hooded Dungeon Merchant NPC Shop (`buy_merchant_upgrade()` via `[B]` key, `"Merchant [B]"` button, and `"buy_upgrade"` UDP RPC offering **Ashen Whetstone** `+3 Dmg` for `35g`, **Obsidian Plate** `+15 Max HP` for `40g`, and **Ashen Healing Elixir** `+1 Potion` for `25g`).
 - Add `npc_merchant.png` and `prop_coin.png` pixel-art sprites to `sprite_art_generator.gd` (bringing total exported `.png` sprites to 27) and expand headless Godot test suite to 46/46 assertions (`godot_project/tests/test_hud_headless.gd`).

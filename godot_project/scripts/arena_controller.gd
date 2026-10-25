@@ -71,10 +71,16 @@ const CINDER_BURN_DAMAGE_PER_STACK: int = 5
 const STORMCHAIN_RANGE: float = 340.0
 const STORMCHAIN_RATIO: float = 0.50
 const ENEMY_GOLD_REWARD: int = 20
+const MIMIC_GOLD_REWARD: int = 45
 const BOSS_GOLD_REWARD: int = 60
 const COIN_MAGNET_RADIUS: float = 160.0
 const COIN_PICKUP_RADIUS: float = 28.0
 const MERCHANT_POS: Vector2 = Vector2(210.0, 175.0)
+const SPIKE_TRAP_CYCLE_INTERVAL: float = 2.0
+const SPIKE_TRAP_TICK_INTERVAL: float = 0.6
+const SPIKE_TRAP_ENEMY_DAMAGE: int = 12
+const SPIKE_TRAP_HERO_DAMAGE: int = 6
+const SPIKE_TRAP_RADIUS: float = 28.0
 
 var loader: Node = null
 var sfx_node: Node = null
@@ -144,6 +150,13 @@ var coin_drops: Array[Dictionary] = []
 var shop_bonus_damage: int = 0
 var shop_bonus_max_hp: int = 0
 var shop_purchases_count: int = 0
+var spike_traps: Array[Dictionary] = []
+var _spike_cycle_accum: float = 0.0
+var _spike_tick_accum: float = 0.0
+var total_trap_triggers: int = 0
+var total_mimics_awakened: int = 0
+var total_enemies_defeated: int = 0
+var total_manual_respawns: int = 0
 
 var _ui_layer: CanvasLayer
 var _status_label: Label
@@ -160,6 +173,7 @@ func _ready() -> void:
 	_init_dungeon_floor()
 	_init_obstacles()
 	_init_hazard_zones()
+	_init_spike_traps()
 	_init_dummies()
 	_build_arena_overlay()
 	_bind_loader()
@@ -327,6 +341,7 @@ func enter_dungeon_door(direction: String, force_unlock: bool = false) -> Dictio
 
 	var r_type: String = str(target_room.get("type", "skirmish"))
 	var r_name: String = str(target_room.get("name", "Dungeon Room"))
+	var room_cleared: bool = bool(target_room.get("cleared", false))
 	var bonus_note: String = ""
 
 	if r_type == "sanctuary":
@@ -339,12 +354,17 @@ func enter_dungeon_door(direction: String, force_unlock: bool = false) -> Dictio
 		for i in range(dummies.size()):
 			dummies[i]["hp"] = 0
 			dummies[i]["alive"] = false
+	elif room_cleared:
+		for i in range(dummies.size()):
+			dummies[i]["hp"] = 0
+			dummies[i]["alive"] = false
+		bonus_note = " (Room Cleared — Press [R] to Respawn Enemies)"
 	elif r_type == "treasure":
 		_init_dummies(maxi(1, wave_number))
 		if first_visit:
-			spawn_relic_chest(Vector2(520.0, 300.0), 0)
-			spawn_relic_chest(Vector2(620.0, 400.0), 1)
-			bonus_note = " (2 Golden Relic Chests Discovered!)"
+			spawn_relic_chest(Vector2(520.0, 300.0), 0, false)
+			spawn_relic_chest(Vector2(620.0, 400.0), 1, true)
+			bonus_note = " (2 Golden Relic Chests Discovered — Watch for Mimics!)"
 	elif r_type == "boss":
 		_init_dummies(3)
 		bonus_note = " (ASHEN TITAN [BOSS] AWAITS!)"
@@ -565,6 +585,93 @@ func step_hazard_zones(delta: float) -> Dictionary:
 	return {
 		"enemies_burned": enemies_burned,
 		"sanctuary_healed": sanctuary_healed
+	}
+
+
+## Initializes the 2 cyclic Iron Spike Grate traps on the dungeon floor.
+func _init_spike_traps() -> void:
+	_spike_cycle_accum = 0.0
+	_spike_tick_accum = 0.0
+	spike_traps = [
+		{
+			"name": "Iron Spike Grate NW",
+			"pos": Vector2(490.0, 250.0),
+			"radius": SPIKE_TRAP_RADIUS,
+			"armed": false
+		},
+		{
+			"name": "Iron Spike Grate SE",
+			"pos": Vector2(670.0, 450.0),
+			"radius": SPIKE_TRAP_RADIUS,
+			"armed": true
+		}
+	]
+
+
+## Toggles all floor Spike Traps between retracted and armed states (or forces all armed).
+func trigger_spike_trap_cycle(force_all_armed: bool = false) -> Dictionary:
+	var armed_count: int = 0
+	for i in range(spike_traps.size()):
+		var next_armed: bool = true if force_all_armed else not bool(spike_traps[i].get("armed", false))
+		spike_traps[i]["armed"] = next_armed
+		if next_armed:
+			armed_count += 1
+	queue_redraw()
+	return {
+		"status": "cycled",
+		"armed_count": armed_count,
+		"trap_count": spike_traps.size()
+	}
+
+
+## Steps cyclic floor Spike Traps, toggling states every 2.0s and dealing bleed damage to overlapping enemies and heroes.
+func step_spike_traps(delta: float) -> Dictionary:
+	_spike_cycle_accum += delta
+	if _spike_cycle_accum >= SPIKE_TRAP_CYCLE_INTERVAL:
+		_spike_cycle_accum -= SPIKE_TRAP_CYCLE_INTERVAL
+		trigger_spike_trap_cycle(false)
+
+	_spike_tick_accum += delta
+	var enemy_hits: int = 0
+	var hero_hits: int = 0
+	if _spike_tick_accum < SPIKE_TRAP_TICK_INTERVAL:
+		return {"enemy_hits": 0, "hero_hits": 0, "total_trap_triggers": total_trap_triggers}
+
+	_spike_tick_accum -= SPIKE_TRAP_TICK_INTERVAL
+	for trap in spike_traps:
+		if not bool(trap.get("armed", false)):
+			continue
+		var t_pos: Vector2 = trap.get("pos", Vector2.ZERO)
+		var t_rad: float = float(trap.get("radius", SPIKE_TRAP_RADIUS))
+
+		for i in range(dummies.size()):
+			if not bool(dummies[i].get("alive", true)):
+				continue
+			var d_pos: Vector2 = dummies[i].get("pos", Vector2.ZERO)
+			var d_rad: float = float(dummies[i].get("radius", DUMMY_RADIUS))
+			if d_pos.distance_to(t_pos) <= t_rad + d_rad * 0.65:
+				enemy_hits += 1
+				total_trap_triggers += 1
+				spawn_particle_burst(d_pos, Color(0.95, 0.22, 0.24), 10, 1.0)
+				spawn_floating_text(d_pos + Vector2(0, -16), "SPIKED -%d!" % SPIKE_TRAP_ENEMY_DAMAGE, Color(0.98, 0.32, 0.32), false)
+				apply_damage_to_dummy(i, SPIKE_TRAP_ENEMY_DAMAGE, false, false)
+
+		if player_pos.distance_to(t_pos) <= t_rad + PLAYER_RADIUS * 0.65 and dash_iframe_timer <= 0.0:
+			hero_hits += 1
+			total_trap_triggers += 1
+			var armor: int = loader.get_armor_reduction() if (loader != null and loader.has_method("get_armor_reduction")) else 0
+			var bleed_dmg: int = maxi(2, SPIKE_TRAP_HERO_DAMAGE - armor)
+			if loader != null and loader.has_method("modify_health"):
+				loader.modify_health(-bleed_dmg)
+			spawn_particle_burst(player_pos, Color(0.95, 0.22, 0.24), 10, 1.0)
+			spawn_floating_text(player_pos + Vector2(0, -16), "SPIKE TRAP -%d HP!" % bleed_dmg, Color(1.0, 0.32, 0.32), false)
+			_refresh_status_bar()
+
+	queue_redraw()
+	return {
+		"enemy_hits": enemy_hits,
+		"hero_hits": hero_hits,
+		"total_trap_triggers": total_trap_triggers
 	}
 
 
@@ -1284,6 +1391,12 @@ func _build_arena_overlay() -> void:
 	room_btn.pressed.connect(func() -> void: enter_next_unexplored_room())
 	hbox.add_child(room_btn)
 
+	var respawn_btn := Button.new()
+	respawn_btn.name = "RespawnEnemiesButton"
+	respawn_btn.text = "Respawn [R]"
+	respawn_btn.pressed.connect(func() -> void: respawn_enemies(true))
+	hbox.add_child(respawn_btn)
+
 	var shop_btn := Button.new()
 	shop_btn.name = "MerchantShopButton"
 	shop_btn.text = "Merchant [B]"
@@ -1344,6 +1457,55 @@ func toggle_wave_survival() -> bool:
 	_refresh_status_bar()
 	queue_redraw()
 	return wave_survival_active
+
+
+## Respawns enemies in the current room on demand ([R] Key / "Respawn [R]" Button / "respawn_enemies" RPC).
+func respawn_enemies(advance_wave: bool = true) -> Dictionary:
+	if advance_wave and (_are_all_dummies_defeated() or wave_survival_active):
+		wave_number += 1
+		if loader != null and loader.has_method("record_wave_progress"):
+			loader.record_wave_progress(wave_number, wave_score)
+
+	var c_key := get_room_key(current_room_coord)
+	if dungeon_rooms.has(c_key):
+		dungeon_rooms[c_key]["cleared"] = false
+
+	_init_dummies(maxi(1, wave_number))
+	total_manual_respawns += 1
+
+	for d in dummies:
+		var d_pos: Vector2 = d.get("pos", Vector2(760.0, 350.0))
+		spawn_particle_burst(d_pos, Color(0.85, 0.38, 0.98), 14, 1.2)
+	spawn_floating_text(player_pos + Vector2(0, -24), "WAVE %d SPAWNED!" % wave_number, Color(0.95, 0.72, 1.0), true)
+	_play_sfx("boss_spawn" if is_boss_wave() else "dash")
+
+	var boss_tag := " [BOSS WAVE: Ashen Titan Spawned!]" if is_boss_wave() else ""
+	var msg := "[Enemies Respawned! [R]] Spawned Wave %d (%d enemies)%s!" % [
+		wave_number,
+		dummies.size(),
+		boss_tag
+	]
+	if _combat_banner != null:
+		_combat_banner.text = msg
+	arena_combat_event.emit(msg)
+	_refresh_status_bar()
+	queue_redraw()
+	return {
+		"status": "respawned",
+		"wave_number": wave_number,
+		"enemies_spawned": dummies.size(),
+		"is_boss_wave": is_boss_wave(),
+		"total_manual_respawns": total_manual_respawns,
+		"message": msg
+	}
+
+
+## Returns true if there is an awakened Relic Mimic [ELITE] alive in the arena.
+func has_alive_mimic() -> bool:
+	for d in dummies:
+		if bool(d.get("alive", true)) and bool(d.get("is_mimic", false)):
+			return true
+	return false
 
 
 ## Executes a Mana Dash (-6 MP), bursting the hero 145 px and granting 0.45s of invulnerability frames.
@@ -1810,8 +1972,8 @@ func trigger_screen_shake(trauma_amount: float = 0.45) -> void:
 	screen_shake_trauma = clampf(screen_shake_trauma + trauma_amount, 0.0, 1.0)
 
 
-## Spawns a collectible Relic Chest in the arena at world_pos.
-func spawn_relic_chest(world_pos: Vector2, relic_index: int = 0) -> Dictionary:
+## Spawns a collectible Relic Chest (or disguised Mimic Chest if is_mimic is true) in the arena at world_pos.
+func spawn_relic_chest(world_pos: Vector2, relic_index: int = 0, is_mimic: bool = false) -> Dictionary:
 	var clamped_pos := Vector2(
 		clampf(world_pos.x, ARENA_MIN_BOUNDS.x + 30.0, ARENA_MAX_BOUNDS.x - 30.0),
 		clampf(world_pos.y, ARENA_MIN_BOUNDS.y + 30.0, ARENA_MAX_BOUNDS.y - 30.0)
@@ -1819,6 +1981,7 @@ func spawn_relic_chest(world_pos: Vector2, relic_index: int = 0) -> Dictionary:
 	var chest := {
 		"pos": clamped_pos,
 		"relic_index": relic_index,
+		"is_mimic": is_mimic,
 		"label": "Relic Chest [E]"
 	}
 	loot_chests.append(chest)
@@ -1826,7 +1989,12 @@ func spawn_relic_chest(world_pos: Vector2, relic_index: int = 0) -> Dictionary:
 	return chest
 
 
-## Collects the nearest Relic Chest (either within pickup radius or remotely via [E] / RPC) and grants its Relic.
+## Spawns a disguised Relic Mimic Chest at world_pos that awakens as Relic Mimic [ELITE] when opened.
+func spawn_mimic_chest(world_pos: Vector2, relic_index: int = 0) -> Dictionary:
+	return spawn_relic_chest(world_pos, relic_index, true)
+
+
+## Collects the nearest Relic Chest (either within pickup radius or remotely via [E] / RPC) and grants its Relic (or awakens a Mimic).
 func collect_nearest_relic_chest(allow_remote_pickup: bool = true) -> Dictionary:
 	if loot_chests.is_empty():
 		return {"error": "No Relic Chests available in arena"}
@@ -1846,8 +2014,46 @@ func collect_nearest_relic_chest(allow_remote_pickup: bool = true) -> Dictionary
 		return {"status": "out_of_range", "distance": best_dist}
 
 	var chest: Dictionary = loot_chests[best_idx]
+	var c_pos: Vector2 = chest.get("pos", player_pos)
 	loot_chests.remove_at(best_idx)
 	var relic_idx: int = int(chest.get("relic_index", 0))
+
+	if bool(chest.get("is_mimic", false)):
+		dummies.append({
+			"name": "Relic Mimic [ELITE]",
+			"pos": c_pos,
+			"hp": 85,
+			"max_hp": 85,
+			"speed": BASE_ENEMY_CHASE_SPEED * 1.25,
+			"alive": true,
+			"is_boss": false,
+			"is_mimic": true,
+			"relic_index": relic_idx,
+			"radius": 24.0,
+			"flash_timer": 0.25,
+			"color": Color(0.92, 0.28, 0.58)
+		})
+		total_mimics_awakened += 1
+		var c_key := get_room_key(current_room_coord)
+		if dungeon_rooms.has(c_key):
+			dungeon_rooms[c_key]["cleared"] = false
+		spawn_particle_burst(c_pos, Color(0.95, 0.25, 0.55), 22, 1.45)
+		trigger_screen_shake(0.50)
+		spawn_floating_text(c_pos + Vector2(0, -18), "MIMIC AMBUSH!", Color(1.0, 0.28, 0.55), true)
+		_play_sfx("boss_spawn")
+		var mimic_msg := "[MIMIC AMBUSH!] The chest sprung to life as Relic Mimic [ELITE] (85/85 HP) — slay it for +45g & a guaranteed Relic!"
+		if _combat_banner != null:
+			_combat_banner.text = mimic_msg
+		arena_combat_event.emit(mimic_msg)
+		_refresh_status_bar()
+		queue_redraw()
+		return {
+			"status": "mimic_awakened",
+			"enemy_index": dummies.size() - 1,
+			"relic_index": relic_idx,
+			"total_mimics_awakened": total_mimics_awakened,
+			"message": mimic_msg
+		}
 
 	var grant_res: Dictionary = {}
 	if loader != null and loader.has_method("grant_relic_item"):
@@ -2099,56 +2305,50 @@ func apply_damage_to_dummy(dummy_index: int, damage: int, is_crit: bool = false,
 	var msg: String = ""
 	if new_hp <= 0:
 		var is_boss_kill: bool = bool(dummy.get("is_boss", false))
-		var score_mult: int = 300 if is_boss_kill else 100
+		var is_mimic_kill: bool = bool(dummy.get("is_mimic", false))
+		var score_mult: int = 300 if is_boss_kill else (200 if is_mimic_kill else 100)
 		wave_score += score_mult * wave_number
-		var gold_reward: int = BOSS_GOLD_REWARD if is_boss_kill else ENEMY_GOLD_REWARD
+		var gold_reward: int = BOSS_GOLD_REWARD if is_boss_kill else (MIMIC_GOLD_REWARD if is_mimic_kill else ENEMY_GOLD_REWARD)
 		spawn_coin_drop(d_pos, gold_reward, true)
 		if is_boss_kill and loader != null and loader.has_method("grant_consumable_potion"):
 			loader.grant_consumable_potion(1)
+		if is_mimic_kill and loader != null and loader.has_method("grant_relic_item"):
+			loader.grant_relic_item(int(dummy.get("relic_index", 0)))
+			spawn_floating_text(d_pos + Vector2(0, -24), "+MIMIC RELIC!", Color(1.0, 0.88, 0.28), true)
 		if loader != null and loader.has_method("record_wave_progress"):
 			loader.record_wave_progress(wave_number, wave_score)
-		if wave_survival_active:
-			dummy["hp"] = 0
-			dummy["alive"] = false
-			dummies[dummy_index] = dummy
-			if _are_all_dummies_defeated():
-				var c_key := get_room_key(current_room_coord)
-				if dungeon_rooms.has(c_key):
-					dungeon_rooms[c_key]["cleared"] = true
+
+		dummy["hp"] = 0
+		dummy["alive"] = false
+		dummies[dummy_index] = dummy
+		total_enemies_defeated += 1
+		spawn_particle_burst(d_pos, Color(1.0, 0.42, 0.18), 20, 1.35)
+		spawn_floating_text(d_pos + Vector2(0, -20), "DEFEATED!", Color(1.0, 0.45, 0.28), true)
+
+		if _are_all_dummies_defeated():
+			var c_key := get_room_key(current_room_coord)
+			if dungeon_rooms.has(c_key):
+				dungeon_rooms[c_key]["cleared"] = true
+			if not is_mimic_kill:
 				var drop_pos: Vector2 = dummy.get("pos", Vector2(560.0, 350.0))
-				spawn_relic_chest(drop_pos, (wave_number - 1) % 3)
-				wave_number += 1
-				if loader != null and loader.has_method("record_wave_progress"):
-					loader.record_wave_progress(wave_number, wave_score)
-				_init_dummies(wave_number)
-				if loader != null:
-					loader.modify_health(15)
-					loader.modify_mana(10, true)
-				var boss_tag := " [BOSS WAVE: Ashen Titan Spawned!]" if is_boss_wave() else ""
-				msg = "%s[WAVE %d CLEARED!] Relic Chest Dropped! +15 HP & +10 MP — Wave %d Incoming (Score: %d)%s!" % [
-					crit_prefix,
-					wave_number - 1,
-					wave_number,
-					wave_score,
-					boss_tag
-				]
-			else:
-				msg = "%s[Enemy Defeated!] %s eliminated %s (+%d Score)!" % [
-					crit_prefix,
-					atk_name,
-					str(dummy.get("name", "Enemy")),
-					score_mult * wave_number
-				]
+				spawn_relic_chest(drop_pos, (wave_number - 1) % 3, false)
+			if loader != null:
+				loader.modify_health(15)
+				loader.modify_mana(10, true)
+			msg = "%s[ROOM CLEARED! Wave %d Defeated] %s eliminated %s (+%dg, +15 HP/+10 MP) — Press [R] to Respawn Enemies or [N] for Next Room!" % [
+				crit_prefix,
+				wave_number,
+				atk_name,
+				str(dummy.get("name", "Enemy")),
+				gold_reward
+			]
 		else:
-			dummy["hp"] = max_hp
-			dummies[dummy_index] = dummy
-			msg = "%s[Arena Kill!] %s hit %s for %d dmg — Dummy defeated & respawned (%d/%d HP)!" % [
+			msg = "%s[Enemy Defeated!] %s eliminated %s (+%dg, +%d Score)!" % [
 				crit_prefix,
 				atk_name,
-				str(dummy.get("name", "Dummy")),
-				final_damage,
-				max_hp,
-				max_hp
+				str(dummy.get("name", "Enemy")),
+				gold_reward,
+				score_mult * wave_number
 			]
 	else:
 		dummy["hp"] = new_hp
@@ -2239,6 +2439,8 @@ func _unhandled_input(event: InputEvent) -> void:
 				cycle_elemental_stance()
 			elif ke.keycode == KEY_B:
 				buy_merchant_upgrade()
+			elif ke.keycode == KEY_R:
+				respawn_enemies(true)
 
 
 func _process(delta: float) -> void:
@@ -2301,13 +2503,14 @@ func _process(delta: float) -> void:
 	if ai_pilot_active:
 		step_ai_pilot(delta)
 
-	# Step Environmental Hazard & Sanctuary Zones, Elemental Statuses, and Coin Drops
+	# Step Environmental Hazard & Sanctuary Zones, Spike Traps, Elemental Statuses, and Coin Drops
 	step_hazard_zones(delta)
+	step_spike_traps(delta)
 	step_elemental_statuses(delta)
 	step_coin_drops(delta)
 
-	# 2. Wave Survival Enemy AI Pursuit & Contact Check
-	if wave_survival_active:
+	# 2. Wave Survival / Awakened Mimic Enemy AI Pursuit & Contact Check
+	if wave_survival_active or has_alive_mimic():
 		step_wave_enemies(delta)
 
 	# 3. Update active player & enemy projectiles and check collisions with Obsidian Pillars, dummies, and hero
@@ -2501,6 +2704,24 @@ func _draw() -> void:
 			draw_arc(z_pos, z_rad * (0.58 + cos(_anim_time * 4.5) * 0.06), 0.0, TAU, 6, Color(0.55, 1.0, 0.88, 0.80), 2.0)
 			if font != null:
 				draw_string(font, z_pos + Vector2(-34, 4), "SANCTUARY", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(0.65, 1.0, 0.88, 0.95))
+
+	# 2B. Procedural Cyclic Iron Spike Grate Traps (Retracted vs. Armed)
+	var trap_off_tex: Texture2D = sprite_gen.get_prop_texture("prop_spike_trap_off")
+	var trap_on_tex: Texture2D = sprite_gen.get_prop_texture("prop_spike_trap_on")
+	for trap in spike_traps:
+		var t_pos: Vector2 = trap.get("pos", Vector2.ZERO)
+		var t_rad: float = float(trap.get("radius", SPIKE_TRAP_RADIUS))
+		var is_armed: bool = bool(trap.get("armed", false))
+		var t_tex: Texture2D = trap_on_tex if is_armed else trap_off_tex
+		if t_tex != null:
+			draw_texture_rect(t_tex, Rect2(t_pos - Vector2(22, 18), Vector2(44, 36)), false)
+		else:
+			draw_rect(Rect2(t_pos - Vector2(18, 18), Vector2(36, 36)), Color(0.85, 0.22, 0.24) if is_armed else Color(0.22, 0.26, 0.32), true)
+		var t_ring := Color(0.98, 0.25, 0.25, 0.85) if is_armed else Color(0.42, 0.48, 0.56, 0.45)
+		draw_arc(t_pos, t_rad, 0.0, TAU, 28, t_ring, 2.0 if is_armed else 1.2)
+		if font != null:
+			var t_lbl := "SPIKES [ARMED]" if is_armed else "SPIKES [SAFE]"
+			draw_string(font, t_pos + Vector2(-38, 28), t_lbl, HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(1.0, 0.48, 0.48) if is_armed else Color(0.65, 0.72, 0.82))
 
 	# 3. Carved Runic Obelisk Pillars (Pixel-Art Sprite + Shadow)
 	var pillar_tex: Texture2D = sprite_gen.get_prop_texture("prop_pillar")
@@ -2829,7 +3050,7 @@ func _refresh_status_bar() -> void:
 	var mode_tag := "WAVE %d%s (Score: %d)" % [wave_number, boss_suffix, wave_score] if wave_survival_active else "PRACTICE"
 	var crit_pct := int(round(get_calculated_crit_chance() * 100.0))
 	_status_label.text = (
-		"[%s | %s (%d/%d)] %s (Lv.%d) | HP: %s | MP: %s | Gold: %dg | %s: %d Dmg (Crit: %d%%) | [B]: Shop"
+		"[%s | %s (%d/%d)] %s (Lv.%d) | HP: %s | MP: %s | Gold: %dg | %s: %d Dmg (Crit: %d%%) | [R]: Respawn | [B]: Shop"
 		% [
 			mode_tag,
 			room_name,

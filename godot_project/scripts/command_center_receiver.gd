@@ -228,6 +228,16 @@ func execute_remote_command(command_name: String, payload: Dictionary = {}) -> D
 				var item_k: String = str(payload.get("item_key", ""))
 				var b_res: Dictionary = arena.buy_merchant_upgrade(item_k)
 				action_note = "Remote RPC bought merchant upgrade -> %s" % str(b_res.get("item_key", b_res.get("error", "none")))
+		"respawn_enemies":
+			if arena != null and arena.has_method("respawn_enemies"):
+				var adv_w: bool = bool(payload.get("advance_wave", true))
+				var r_res: Dictionary = arena.respawn_enemies(adv_w)
+				action_note = "Remote RPC respawned enemies -> Wave %d" % int(r_res.get("wave_number", 1))
+		"trigger_spike_trap":
+			if arena != null and arena.has_method("trigger_spike_trap_cycle"):
+				var force_arm: bool = bool(payload.get("force_all_armed", false))
+				var t_res: Dictionary = arena.trigger_spike_trap_cycle(force_arm)
+				action_note = "Remote RPC cycled floor Spike Traps -> %d armed" % int(t_res.get("armed_count", 0))
 		"toggle_mute":
 			if sfx_node != null and sfx_node.has_method("toggle_mute"):
 				var muted_now: bool = sfx_node.toggle_mute()
@@ -323,6 +333,10 @@ func build_telemetry_snapshot() -> Dictionary:
 		"total_gold_earned": int(arena.total_gold_earned) if arena != null else 0,
 		"shop_bonus_damage": int(arena.shop_bonus_damage) if arena != null else 0,
 		"shop_purchases_count": int(arena.shop_purchases_count) if arena != null else 0,
+		"total_enemies_defeated": int(arena.total_enemies_defeated) if arena != null else 0,
+		"total_manual_respawns": int(arena.total_manual_respawns) if arena != null else 0,
+		"total_trap_triggers": int(arena.total_trap_triggers) if arena != null else 0,
+		"total_mimics_awakened": int(arena.total_mimics_awakened) if arena != null else 0,
 		"sfx_muted": bool(sfx_node.muted) if sfx_node != null else false,
 		"total_sfx_played": int(sfx_node.total_sfx_played) if sfx_node != null else 0,
 		"high_wave_reached": int(loader.high_wave_reached) if loader != null else 1,
