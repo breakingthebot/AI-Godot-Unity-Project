@@ -1,0 +1,20 @@
+[gd_scene load_steps=6 format=3 uid="uid://c6x8r5m2q9k4n"]
+
+[ext_resource type="Script" path="res://scripts/character_loader.gd" id="1_loader"]
+[ext_resource type="PackedScene" uid="uid://d3m8k7p2w5x1a" path="res://scenes/character_sheet_hud.tscn" id="2_hud"]
+[ext_resource type="PackedScene" uid="uid://b9w4n6k8r2p1m" path="res://scenes/arena.tscn" id="3_arena"]
+[ext_resource type="Script" path="res://scripts/command_center_receiver.gd" id="4_udp"]
+[ext_resource type="Script" path="res://scripts/procedural_sfx.gd" id="5_sfx"]
+
+[node name="Main" type="Node"]
+script = ExtResource("1_loader")
+
+[node name="ProceduralSfx" type="Node" parent="."]
+script = ExtResource("5_sfx")
+
+[node name="CharacterSheetHUD" parent="." instance=ExtResource("2_hud")]
+
+[node name="Arena" parent="." instance=ExtResource("3_arena")]
+
+[node name="CommandCenterReceiver" type="Node" parent="."]
+script = ExtResource("4_udp")

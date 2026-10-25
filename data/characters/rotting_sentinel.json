@@ -1,0 +1,56 @@
+{
+  "character_id": "ash_003",
+  "name": "Gorvath, The Rotting Sentinel",
+  "race": "Blight-Golem",
+  "character_class": "Plague Warden",
+  "level": 8,
+  "health": {
+    "current": 120,
+    "max": 120
+  },
+  "mana": {
+    "current": 25,
+    "max": 25
+  },
+  "attributes": {
+    "strength": 18,
+    "dexterity": 8,
+    "constitution": 22,
+    "intelligence": 9,
+    "wisdom": 16,
+    "charisma": 6
+  },
+  "skills": [
+    {
+      "name": "Blighted Javelin",
+      "rank": 7,
+      "modifier": "strength"
+    },
+    {
+      "name": "Spore Carapace",
+      "rank": 6,
+      "modifier": "constitution"
+    },
+    {
+      "name": "Ancient Vigil",
+      "rank": 5,
+      "modifier": "wisdom"
+    }
+  ],
+  "inventory": [
+    {
+      "item_id": "weap_rot_01",
+      "name": "Ironwood Siege Greatbow",
+      "quantity": 1
+    },
+    {
+      "item_id": "armor_rot_02",
+      "name": "Fungal Plate Bulwark",
+      "quantity": 1
+    }
+  ],
+  "backstory": {
+    "summary": "Towering over the sunken ramparts, Gorvath endures centuries of decay to shield the last sanctuary gates from the abyss.",
+    "alignment": "True Neutral"
+  }
+}

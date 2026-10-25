@@ -1,0 +1,56 @@
+{
+  "character_id": "ash_001",
+  "name": "Malakor, The Ash-Knight",
+  "race": "Revenant",
+  "character_class": "Ashen Paladin",
+  "level": 7,
+  "health": {
+    "current": 85,
+    "max": 85
+  },
+  "mana": {
+    "current": 35,
+    "max": 35
+  },
+  "attributes": {
+    "strength": 20,
+    "dexterity": 12,
+    "constitution": 18,
+    "intelligence": 11,
+    "wisdom": 14,
+    "charisma": 15
+  },
+  "skills": [
+    {
+      "name": "Cinder Bolts",
+      "rank": 6,
+      "modifier": "strength"
+    },
+    {
+      "name": "Grave Vow",
+      "rank": 5,
+      "modifier": "constitution"
+    },
+    {
+      "name": "Inquisition",
+      "rank": 4,
+      "modifier": "charisma"
+    }
+  ],
+  "inventory": [
+    {
+      "item_id": "weap_ash_01",
+      "name": "Greatblade of Embers",
+      "quantity": 1
+    },
+    {
+      "item_id": "relic_ash_02",
+      "name": "Chalice of Cinders",
+      "quantity": 1
+    }
+  ],
+  "backstory": {
+    "summary": "Bound by the Grave Tax to eternal vigilance, Malakor marches through the grey wastes wielding consecrated ember-forged steel.",
+    "alignment": "Lawful Neutral"
+  }
+}

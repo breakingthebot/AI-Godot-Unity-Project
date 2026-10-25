@@ -1,0 +1,2 @@
+# Pure Python 3.11+ standard library runtime; pytest used for unit testing
+pytest==8.3.3

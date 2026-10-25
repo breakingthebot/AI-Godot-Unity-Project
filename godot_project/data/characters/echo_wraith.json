@@ -1,0 +1,56 @@
+{
+  "character_id": "ash_002",
+  "name": "Vespera, Echo-Wraith",
+  "race": "Voidborn",
+  "character_class": "Phantom Assassin",
+  "level": 6,
+  "health": {
+    "current": 52,
+    "max": 52
+  },
+  "mana": {
+    "current": 45,
+    "max": 45
+  },
+  "attributes": {
+    "strength": 10,
+    "dexterity": 22,
+    "constitution": 12,
+    "intelligence": 16,
+    "wisdom": 14,
+    "charisma": 13
+  },
+  "skills": [
+    {
+      "name": "Phase Daggers",
+      "rank": 6,
+      "modifier": "dexterity"
+    },
+    {
+      "name": "Shadow Step",
+      "rank": 7,
+      "modifier": "dexterity"
+    },
+    {
+      "name": "Void Whisper",
+      "rank": 5,
+      "modifier": "intelligence"
+    }
+  ],
+  "inventory": [
+    {
+      "item_id": "weap_echo_01",
+      "name": "Twin Resonance Blades",
+      "quantity": 2
+    },
+    {
+      "item_id": "consum_echo_02",
+      "name": "Vial of Condensed Mist",
+      "quantity": 3
+    }
+  ],
+  "backstory": {
+    "summary": "An operative who paid her Grave Tax with her own voice, Vespera strikes from the resonant echoes between dimensions.",
+    "alignment": "Chaotic Neutral"
+  }
+}

@@ -1,0 +1,56 @@
+{
+  "character_id": "char_001",
+  "name": "Kaelen",
+  "race": "Elf",
+  "character_class": "Ranger",
+  "level": 5,
+  "health": {
+    "current": 45,
+    "max": 45
+  },
+  "mana": {
+    "current": 20,
+    "max": 20
+  },
+  "attributes": {
+    "strength": 12,
+    "dexterity": 18,
+    "constitution": 14,
+    "intelligence": 10,
+    "wisdom": 16,
+    "charisma": 8
+  },
+  "skills": [
+    {
+      "name": "Archery",
+      "rank": 5,
+      "modifier": "dexterity"
+    },
+    {
+      "name": "Stealth",
+      "rank": 4,
+      "modifier": "dexterity"
+    },
+    {
+      "name": "Survival",
+      "rank": 6,
+      "modifier": "wisdom"
+    }
+  ],
+  "inventory": [
+    {
+      "item_id": "weap_002",
+      "name": "Longbow",
+      "quantity": 1
+    },
+    {
+      "item_id": "ammo_001",
+      "name": "Arrows",
+      "quantity": 20
+    }
+  ],
+  "backstory": {
+    "summary": "A quiet hunter from the northern woods, Kaelen is sworn to protect the ancient forests from a creeping corruption.",
+    "alignment": "Neutral Good"
+  }
+}
