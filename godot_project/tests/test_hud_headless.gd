@@ -824,21 +824,59 @@ func _process(_delta: float) -> bool:
 		printerr("FAIL: 'toggle_telemetry_overlay' or 'get_combat_telemetry' RPC failed: tog=", tog_ct_rpc, " get=", get_ct_rpc)
 		quit(1)
 		return true
-	print("PASS [57/58]: Combat Telemetry Overlay [K] & UDP RPCs verified (Overlay visible=%s, Snapshot Rolling DPS=%.1f/s)." % [
+	print("PASS [57/60]: Combat Telemetry Overlay [K] & UDP RPCs verified (Overlay visible=%s, Snapshot Rolling DPS=%.1f/s)." % [
 		str(arena.telemetry_overlay_visible),
 		float(ct_snap.get("rolling_dps", 0.0))
 	])
 
-	# 58. Verify Failure Mode / Missing File Boundary Error Banner
+	# 58. Verify Cursed Shrine Gambits ([U] Key / activate_cursed_gambit & prop_cursed_altar.png Sprite — 37 PNGs)
+	loader.modify_health(999)
+	var pre_gambit_dmg: int = arena.get_calculated_arrow_damage()
+	var pre_gambit_crit: float = arena.get_calculated_crit_chance()
+	var gambit_res_1: Dictionary = arena.activate_cursed_gambit("blood_might")
+	var gambit_res_2: Dictionary = arena.activate_cursed_gambit("shadow_fury")
+	if str(gambit_res_1.get("status", "")) != "gambit_activated" or str(gambit_res_2.get("status", "")) != "gambit_activated" or arena.gambit_bonus_damage < 4 or arena.gambit_bonus_crit < 0.14 or arena.get_calculated_arrow_damage() < pre_gambit_dmg + 4 or arena.get_calculated_crit_chance() <= pre_gambit_crit or arena.sprite_gen.textures.size() < 37:
+		printerr("FAIL: Cursed Shrine Gambits [U] or prop_cursed_altar.png failed: res1=", gambit_res_1, " res2=", gambit_res_2, " sprites=", arena.sprite_gen.textures.size())
+		quit(1)
+		return true
+	print("PASS [58/60]: Cursed Shrine Gambits [U] & Blood Altar Sprite verified (37 total PNGs, Dmg %d->%d, Crit %.0f%%->%.0f%%, HP sacrificed=%d)." % [
+		pre_gambit_dmg,
+		arena.get_calculated_arrow_damage(),
+		pre_gambit_crit * 100.0,
+		arena.get_calculated_crit_chance() * 100.0,
+		arena.total_gambit_hp_sacrificed
+	])
+
+	# 59. Verify Cursed Gambit Non-Lethal 1 HP Floor Clamp & "activate_gambit" UDP RPC ("plunder_pact")
+	var pre_plunder_gold: int = arena.gold_coins
+	var pre_plunder_relics: int = int(loader.get_inventory_bonuses().get("relic_count", 0))
+	var gambit_rpc: Dictionary = udp_bridge.execute_remote_command("activate_gambit", {"pact": "plunder_pact"})
+	var gambit_snap: Dictionary = gambit_rpc.get("snapshot", {})
+	var post_plunder_relics: int = int(loader.get_inventory_bonuses().get("relic_count", 0))
+	loader.current_data["health"]["current"] = 1
+	var low_hp_gambit: Dictionary = arena.activate_cursed_gambit("blood_might")
+	if arena.gold_coins < pre_plunder_gold + 60 or post_plunder_relics < pre_plunder_relics + 1 or int(gambit_snap.get("total_gambits_activated", 0)) < 3 or not low_hp_gambit.has("error"):
+		printerr("FAIL: 'activate_gambit' Plunder Pact RPC or 1 HP non-lethal boundary failed: rpc=", gambit_rpc, " low_hp=", low_hp_gambit)
+		quit(1)
+		return true
+	loader.modify_health(999)
+	print("PASS [59/60]: Cursed Shrine 'activate_gambit' UDP RPC & 1 HP Non-Lethal Guard verified (Gold +%dg, Relics %d->%d, Total Gambits=%d)." % [
+		arena.gold_coins - pre_plunder_gold,
+		pre_plunder_relics,
+		post_plunder_relics,
+		int(gambit_snap.get("total_gambits_activated", 0))
+	])
+
+	# 60. Verify Failure Mode / Missing File Boundary Error Banner
 	hud.toggle_arena_mode()
 	var missing_res: Dictionary = loader.load_character_data("res://data/NonExistentChaosFile.json")
 	if not missing_res.is_empty() or not hud.error_banner.visible:
 		printerr("FAIL: Missing file error banner did not trigger.")
 		quit(1)
 		return true
-	print("PASS [58/58]: Missing-file error state verified -> ", hud.error_banner.text)
+	print("PASS [60/60]: Missing-file error state verified -> ", hud.error_banner.text)
 
-	print("=== ALL 58 HEADLESS HUD, ARENA, ROSTER, ULTIMATES, BOSS, RELICS, SFX, POTIONS, PILLARS, CRITS, ENEMY BOLTS, PARRY, HAZARDS, FRENZY, AI PILOT, PIXEL-ART SPRITES, DUNGEON CRAWLER, BOSS ENRAGE, ELEMENTAL INFUSIONS, MERCHANT SHOP, SPIKE TRAPS, MIMICS, RESPAWN [R], TALENT TREE [T], FLOOR DESCENT [X], BOUNTY BOARD [J], TITLE SCREEN, SPIRIT OWL FAMILIAR [Z], DPS TELEMETRY [K], UDP & SAVE/LOAD TESTS PASSED ===")
+	print("=== ALL 60 HEADLESS HUD, ARENA, ROSTER, ULTIMATES, BOSS, RELICS, SFX, POTIONS, PILLARS, CRITS, ENEMY BOLTS, PARRY, HAZARDS, FRENZY, AI PILOT, PIXEL-ART SPRITES, DUNGEON CRAWLER, BOSS ENRAGE, ELEMENTAL INFUSIONS, MERCHANT SHOP, SPIKE TRAPS, MIMICS, RESPAWN [R], TALENT TREE [T], FLOOR DESCENT [X], BOUNTY BOARD [J], TITLE SCREEN, SPIRIT OWL FAMILIAR [Z], DPS TELEMETRY [K], CURSED GAMBITS [U], UDP & SAVE/LOAD TESTS PASSED ===")
 	_main_instance.queue_free()
 	quit(0)
 	return true

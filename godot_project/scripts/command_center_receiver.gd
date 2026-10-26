@@ -280,6 +280,11 @@ func execute_remote_command(command_name: String, payload: Dictionary = {}) -> D
 			if arena != null and arena.has_method("get_combat_telemetry_summary"):
 				var ct_res: Dictionary = arena.get_combat_telemetry_summary()
 				action_note = "Remote RPC queried Combat Telemetry -> Total Dmg: %d, Rolling DPS: %.1f" % [int(ct_res.get("total_damage_dealt", 0)), float(ct_res.get("rolling_dps", 0.0))]
+		"activate_gambit":
+			if arena != null and arena.has_method("activate_cursed_gambit"):
+				var p_key: String = str(payload.get("pact_key", ""))
+				var gm_res: Dictionary = arena.activate_cursed_gambit(p_key)
+				action_note = "Remote RPC activated Cursed Gambit -> %s (Total: %d)" % [str(gm_res.get("pact_key", gm_res.get("error", "none"))), int(gm_res.get("total_gambits_activated", 0))]
 		"toggle_mute":
 			if sfx_node != null and sfx_node.has_method("toggle_mute"):
 				var muted_now: bool = sfx_node.toggle_mute()
@@ -398,6 +403,10 @@ func build_telemetry_snapshot() -> Dictionary:
 		"total_damage_dealt": int(arena.total_damage_dealt) if arena != null else 0,
 		"total_hits_landed": int(arena.total_hits_landed) if arena != null else 0,
 		"highest_single_hit": int(arena.highest_single_hit) if arena != null else 0,
+		"total_gambits_activated": int(arena.total_gambits_activated) if arena != null else 0,
+		"total_gambit_hp_sacrificed": int(arena.total_gambit_hp_sacrificed) if arena != null else 0,
+		"gambit_bonus_damage": int(arena.gambit_bonus_damage) if arena != null else 0,
+		"gambit_bonus_crit_pct": int(round(arena.gambit_bonus_crit * 100.0)) if arena != null else 0,
 		"sfx_muted": bool(sfx_node.muted) if sfx_node != null else false,
 		"total_sfx_played": int(sfx_node.total_sfx_played) if sfx_node != null else 0,
 		"high_wave_reached": int(loader.high_wave_reached) if loader != null else 1,

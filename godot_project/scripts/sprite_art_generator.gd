@@ -57,6 +57,7 @@ func build_all_sprites(save_to_disk: bool = true) -> void:
 	_register_pattern("prop_spike_trap_on", _PROP_SPIKE_TRAP_ON, _PALETTE_TRAP, save_to_disk)
 	_register_pattern("prop_stairs", _PROP_STAIRS, _PALETTE_DOOR, save_to_disk)
 	_register_pattern("prop_bounty_board", _PROP_BOUNTY_BOARD, _PALETTE_MERCHANT, save_to_disk)
+	_register_pattern("prop_cursed_altar", _PROP_CURSED_ALTAR, _PALETTE_TRAP, save_to_disk)
 	_register_pattern("ui_crest_emblem", _UI_CREST_EMBLEM, _PALETTE_MERCHANT, save_to_disk)
 	_register_pattern("npc_merchant", _NPC_MERCHANT, _PALETTE_MERCHANT, save_to_disk)
 	_register_pattern("prop_coin", _PROP_COIN, _PALETTE_MERCHANT, save_to_disk)
@@ -862,4 +863,20 @@ const _COMPANION_OWL_F1: Array[String] = [
 	".....OBCCCBO.....",
 	".....OOG.GOO.....",
 	"......OO.OO......"
+]
+
+const _PROP_CURSED_ALTAR: Array[String] = [
+	"....OOOOOOOO....",
+	"...ORRRRRRRRO...",
+	"..ORRSSRRRRSSRO..",
+	".ORRSORRRRROSRRO.",
+	".ORRRRRRRRRRRRRO.",
+	"..OOMMDDDDMMOO..",
+	"..OMDDRRRRDDMO..",
+	"..OMDDRSSRRDMO..",
+	"..OMDDRRRRDDMO..",
+	".OOMMDDDDDDMMOO.",
+	"OMDDDDDDDDDDDDMO",
+	"OMMDDDDDDDDDDMMO",
+	".OOOOOOOOOOOOOO."
 ]

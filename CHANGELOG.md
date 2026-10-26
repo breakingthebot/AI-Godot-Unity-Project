@@ -1,5 +1,9 @@
 # Changelog
 
+## [3.1.0] - 2026-10-25
+- Add Cursed Shrine Gambits & High-Risk / High-Reward Corruptions (`activate_cursed_gambit()` via **`[U]` key**, **`"Gambit (0) [U]"` button**, and `"activate_gambit"` UDP RPC) sacrificing `25%` current HP (clamped with a non-lethal `1 HP` floor) in exchange for rotating permanent corruptions: **Pact of Blood Might** (`+4` permanent Base Attack Damage), **Pact of Shadow Fury** (`+15%` permanent Critical Hit Chance), and **Pact of Forbidden Plunder** (`+60g` Gold Coins & `+1` Guaranteed Relic).
+- Add `prop_cursed_altar.png` crimson skull-carved Blood Altar sprite in `sprite_art_generator.gd` (bringing total exported `.png` sprites to 37) and expand headless Godot test suite to 60/60 assertions (`godot_project/tests/test_hud_headless.gd`).
+
 ## [3.0.1] - 2026-10-25
 - Fix GUI formatting, right-edge text overflow, and map/HUD overlaps across `project.godot`, `arena_controller.gd`, and `character_sheet_hud.gd`:
   - Configure `1280x720` HD viewport (`window/size/viewport_width=1280`, `window/size/viewport_height=720`, `canvas_items` stretch mode) in `godot_project/project.godot`.

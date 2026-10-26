@@ -187,6 +187,10 @@ var total_hits_landed: int = 0
 var highest_single_hit: int = 0
 var combat_elapsed_seconds: float = 0.0
 var _dps_window_events: Array[Dictionary] = []
+var gambit_bonus_damage: int = 0
+var gambit_bonus_crit: float = 0.0
+var total_gambits_activated: int = 0
+var total_gambit_hp_sacrificed: int = 0
 
 const FAMILIAR_ORBIT_RADIUS: float = 48.0
 const FAMILIAR_ORBIT_SPEED: float = 2.6
@@ -195,6 +199,9 @@ const FAMILIAR_BASE_DAMAGE: int = 9
 const FAMILIAR_UPGRADE_GOLD_COST: int = 30
 const FAMILIAR_LOOT_FETCH_RADIUS: float = 220.0
 const DPS_ROLLING_WINDOW_SECONDS: float = 5.0
+const CURSED_ALTAR_POS: Vector2 = Vector2(360.0, 505.0)
+const GAMBIT_HP_COST_RATIO: float = 0.25
+const CURSED_GAMBITS: Array[String] = ["blood_might", "shadow_fury", "plunder_pact"]
 
 var _ui_layer: CanvasLayer
 var _status_label: Label
@@ -205,6 +212,7 @@ var _stance_btn: Button
 var _talent_btn: Button
 var _bounty_btn: Button
 var _familiar_btn: Button
+var _gambit_btn: Button
 var _telemetry_btn: Button
 var _sfx_btn: Button
 
@@ -1900,6 +1908,89 @@ func toggle_telemetry_overlay() -> Dictionary:
 	return summary
 
 
+## Activates a Cursed Shrine Blood Gambit ([U] Key / "Gambit [U]" Button / "activate_gambit" RPC),
+## sacrificing 25% current HP (clamped so HP never drops below 1) in exchange for a permanent corruption boon.
+func activate_cursed_gambit(pact_key: String = "") -> Dictionary:
+	var catalog := {
+		"blood_might": "Pact of Blood Might (+4 Permanent Base Attack Damage)",
+		"shadow_fury": "Pact of Shadow Fury (+15% Permanent Critical Hit Chance)",
+		"plunder_pact": "Pact of Forbidden Plunder (+60g Gold Coins & +1 Guaranteed Relic)"
+	}
+	var req := pact_key.strip_edges().to_lower()
+	if req.is_empty():
+		req = CURSED_GAMBITS[total_gambits_activated % CURSED_GAMBITS.size()]
+	if not catalog.has(req):
+		return {"error": "Unknown cursed gambit '%s'" % req}
+
+	var current_hp: int = 45
+	if loader != null and not loader.current_data.is_empty():
+		var h_dict: Dictionary = loader.current_data.get("health", {})
+		current_hp = int(h_dict.get("current", 1))
+
+	if current_hp <= 1:
+		var low_msg := "[Cursed Altar] Cannot activate Blood Gambit at 1 HP — use a Potion [C] or Sanctuary Shrine first!"
+		if _combat_banner != null:
+			_combat_banner.text = low_msg
+		return {"error": "Insufficient HP for Blood Gambit (at 1 HP floor)", "current_hp": current_hp, "message": low_msg}
+
+	var raw_cost: int = maxi(1, int(round(float(current_hp) * GAMBIT_HP_COST_RATIO)))
+	var hp_sacrificed: int = mini(raw_cost, current_hp - 1)
+	var hp_after: int = current_hp - hp_sacrificed
+	if loader != null and loader.has_method("modify_health"):
+		var h_res: Dictionary = loader.modify_health(-hp_sacrificed)
+		hp_after = int(h_res.get("health", {}).get("current", hp_after))
+
+	total_gambits_activated += 1
+	total_gambit_hp_sacrificed += hp_sacrificed
+
+	var boon_short := ""
+	if req == "blood_might":
+		gambit_bonus_damage += 4
+		boon_short = "+4 DMG"
+	elif req == "shadow_fury":
+		gambit_bonus_crit += 0.15
+		boon_short = "+15% CRIT"
+	elif req == "plunder_pact":
+		gold_coins += 60
+		total_gold_earned += 60
+		if loader != null and loader.has_method("grant_relic_item"):
+			loader.grant_relic_item((total_gambits_activated - 1) % 3)
+		boon_short = "+60g & +1 RELIC"
+
+	if _gambit_btn != null:
+		_gambit_btn.text = "Gambit (%d) [U]" % total_gambits_activated
+
+	spawn_particle_burst(CURSED_ALTAR_POS, Color(0.98, 0.18, 0.28), 18, 1.35)
+	spawn_particle_burst(player_pos, Color(0.98, 0.22, 0.32), 16, 1.25)
+	trigger_screen_shake(0.32)
+	spawn_floating_text(player_pos + Vector2(0, -24), "BLOOD GAMBIT: -%d HP -> %s!" % [hp_sacrificed, boon_short], Color(1.0, 0.32, 0.38), true)
+	_play_sfx("boss_spawn")
+
+	var msg := "[Cursed Shrine Gambit -> %s [U]] Sacrificed -%d HP (%d HP left) -> %s!" % [
+		req.to_upper(),
+		hp_sacrificed,
+		hp_after,
+		str(catalog[req])
+	]
+	if _combat_banner != null:
+		_combat_banner.text = msg
+	arena_combat_event.emit(msg)
+	_refresh_status_bar()
+	queue_redraw()
+	return {
+		"status": "gambit_activated",
+		"pact_key": req,
+		"hp_sacrificed": hp_sacrificed,
+		"remaining_hp": hp_after,
+		"gambit_bonus_damage": gambit_bonus_damage,
+		"gambit_bonus_crit_pct": int(round(gambit_bonus_crit * 100.0)),
+		"total_gambits_activated": total_gambits_activated,
+		"total_gambit_hp_sacrificed": total_gambit_hp_sacrificed,
+		"gold_coins": gold_coins,
+		"message": msg
+	}
+
+
 func _build_arena_overlay() -> void:
 	_ui_layer = CanvasLayer.new()
 	_ui_layer.name = "ArenaOverlay"
@@ -2112,6 +2203,13 @@ func _build_arena_overlay() -> void:
 	_familiar_btn.add_theme_font_size_override("font_size", 11)
 	_familiar_btn.pressed.connect(func() -> void: summon_or_upgrade_familiar())
 	row2.add_child(_familiar_btn)
+
+	_gambit_btn = Button.new()
+	_gambit_btn.name = "CursedGambitButton"
+	_gambit_btn.text = "Gambit (0) [U]"
+	_gambit_btn.add_theme_font_size_override("font_size", 11)
+	_gambit_btn.pressed.connect(func() -> void: activate_cursed_gambit())
+	row2.add_child(_gambit_btn)
 
 	var lvl_btn := Button.new()
 	lvl_btn.text = "Level Up [L]"
@@ -2580,10 +2678,10 @@ func get_calculated_arrow_damage() -> int:
 	var relic_dmg: int = 0
 	if loader.has_method("get_inventory_bonuses"):
 		relic_dmg = int(loader.get_inventory_bonuses().get("damage", 0))
-	return maxi(1, BASE_ARROW_DAMAGE + primary_rank + attr_mod + relic_dmg + shop_bonus_damage)
+	return maxi(1, BASE_ARROW_DAMAGE + primary_rank + attr_mod + relic_dmg + shop_bonus_damage + gambit_bonus_damage)
 
 
-## Calculates the active hero's Critical Hit chance (0.05 to 0.65) from Base(8%) + 3% per Dexterity/Wisdom modifier + 10% Frenzy bonus.
+## Calculates the active hero's Critical Hit chance (0.05 to 0.95) from Base(8%) + 3% per Dexterity/Wisdom modifier + 10% Frenzy bonus + Cursed Gambit bonus.
 func get_calculated_crit_chance() -> float:
 	if loader == null or loader.current_data.is_empty():
 		return BASE_CRIT_CHANCE
@@ -2592,7 +2690,7 @@ func get_calculated_crit_chance() -> float:
 	var wis_mod: int = loader.get_attribute_modifier(int(attrs.get("wisdom", 10)))
 	var best_mod: int = maxi(0, maxi(dex_mod, wis_mod))
 	var frenzy_bonus: float = FRENZY_CRIT_BONUS if is_frenzy_active() else 0.0
-	return clampf(BASE_CRIT_CHANCE + float(best_mod) * CRIT_PER_MOD + frenzy_bonus, 0.05, 0.65)
+	return clampf(BASE_CRIT_CHANCE + float(best_mod) * CRIT_PER_MOD + frenzy_bonus + gambit_bonus_crit, 0.05, 0.95)
 
 
 ## Rolls whether an attack is a Critical Hit (2x damage), respecting force_next_crit for deterministic testing.
@@ -3181,6 +3279,8 @@ func _unhandled_input(event: InputEvent) -> void:
 				summon_or_upgrade_familiar()
 			elif ke.keycode == KEY_K:
 				toggle_telemetry_overlay()
+			elif ke.keycode == KEY_U:
+				activate_cursed_gambit()
 
 
 func _process(delta: float) -> void:
@@ -3524,6 +3624,14 @@ func _draw() -> void:
 		draw_texture_rect(board_tex, Rect2(BOUNTY_BOARD_POS - Vector2(22, 18), Vector2(44, 36)), false)
 	if font != null:
 		draw_string(font, BOUNTY_BOARD_POS + Vector2(-58, -22), "Bounty Board [J | T%d]" % bounty_tier, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.98, 0.85, 0.42))
+
+	var altar_tex: Texture2D = sprite_gen.get_prop_texture("prop_cursed_altar")
+	draw_circle(CURSED_ALTAR_POS + Vector2(0, 12), 20.0, Color(0.08, 0.02, 0.04, 0.65))
+	draw_arc(CURSED_ALTAR_POS, 26.0 + sin(_anim_time * 6.5) * 2.5, 0.0, TAU, 32, Color(0.96, 0.18, 0.28, 0.72), 2.0)
+	if altar_tex != null:
+		draw_texture_rect(altar_tex, Rect2(CURSED_ALTAR_POS - Vector2(22, 20), Vector2(44, 40)), false)
+	if font != null:
+		draw_string(font, CURSED_ALTAR_POS + Vector2(-68, -24), "Cursed Altar [U | -25% HP]", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(1.0, 0.38, 0.45))
 
 	var coin_tex: Texture2D = sprite_gen.get_prop_texture("prop_coin")
 	for coin in coin_drops:
