@@ -197,6 +197,7 @@ var _weather_particle_accum: float = 0.0
 var deployed_totems: Array[Dictionary] = []
 var total_totems_deployed: int = 0
 var total_totem_bolts_fired: int = 0
+var total_mythics_forged: int = 0
 
 const FAMILIAR_ORBIT_RADIUS: float = 48.0
 const FAMILIAR_ORBIT_SPEED: float = 2.6
@@ -220,6 +221,9 @@ const TOTEM_AURA_RADIUS: float = 160.0
 const TOTEM_AURA_DAMAGE_MULT: float = 1.15
 const TOTEM_BASE_BOLT_DAMAGE: int = 12
 const TOTEM_MANA_COST: int = 8
+const FORGE_ANVIL_POS: Vector2 = Vector2(510.0, 505.0)
+const FORGE_GOLD_COST: int = 50
+const MYTHIC_FORGE_RECIPES: Array[String] = ["mythic_ashblade", "mythic_aegis", "mythic_stormstrider"]
 
 var _ui_layer: CanvasLayer
 var _status_label: Label
@@ -233,6 +237,7 @@ var _familiar_btn: Button
 var _gambit_btn: Button
 var _mutator_btn: Button
 var _totem_btn: Button
+var _forge_btn: Button
 var _telemetry_btn: Button
 var _sfx_btn: Button
 
@@ -2278,6 +2283,138 @@ func step_arcane_totems(delta: float) -> Dictionary:
 	}
 
 
+## Forges a Mythic-Tier Relic at the Obsidian Blacksmith Anvil ([O] Key / "Forge [O]" Button / "forge_mythic" RPC),
+## spending 50g Gold Coins (or consuming 1 duplicate Relic stack in inventory) to craft a Mythic Relic.
+func forge_mythic_relic(recipe_key: String = "", force_free: bool = false) -> Dictionary:
+	var catalog := {
+		"mythic_ashblade": {
+			"item_id": "relic_mythic_ashblade",
+			"name": "Mythic Sovereign Ashblade (+8 Dmg, +15 HP)",
+			"bonus_damage": 8,
+			"bonus_max_hp": 15,
+			"bonus_speed": 0.0
+		},
+		"mythic_aegis": {
+			"item_id": "relic_mythic_aegis",
+			"name": "Mythic Obsidian Aegis (+5 Dmg, +25 HP)",
+			"bonus_damage": 5,
+			"bonus_max_hp": 25,
+			"bonus_speed": 0.0
+		},
+		"mythic_stormstrider": {
+			"item_id": "relic_mythic_stormstrider",
+			"name": "Mythic Stormstrider Greaves (+6 Dmg, +25 Spd)",
+			"bonus_damage": 6,
+			"bonus_max_hp": 0,
+			"bonus_speed": 25.0
+		}
+	}
+	var req := recipe_key.strip_edges().to_lower()
+	if req.is_empty():
+		req = MYTHIC_FORGE_RECIPES[total_mythics_forged % MYTHIC_FORGE_RECIPES.size()]
+	if not catalog.has(req):
+		return {"error": "Unknown mythic forge recipe '%s'" % req}
+
+	# Check whether the hero can pay 50g Gold Coins or reforge a duplicate Relic stack (quantity >= 2)
+	var dup_idx: int = -1
+	var inventory: Array = []
+	if loader != null and not loader.current_data.is_empty():
+		inventory = loader.current_data.get("inventory", [])
+		for i in range(inventory.size()):
+			var it: Dictionary = inventory[i]
+			var iid: String = str(it.get("item_id", ""))
+			if (iid.begins_with("relic_") or int(it.get("bonus_damage", 0)) > 0) and int(it.get("quantity", 1)) >= 2:
+				dup_idx = i
+				break
+
+	var gold_spent: int = 0
+	var consumed_duplicate: bool = false
+	if not force_free:
+		if gold_coins >= FORGE_GOLD_COST:
+			gold_coins -= FORGE_GOLD_COST
+			gold_spent = FORGE_GOLD_COST
+		elif dup_idx >= 0:
+			var dup_item: Dictionary = inventory[dup_idx]
+			dup_item["quantity"] = maxi(1, int(dup_item.get("quantity", 2)) - 1)
+			inventory[dup_idx] = dup_item
+			consumed_duplicate = true
+		else:
+			var err_msg := "[Blacksmith Forge] Need %dg Gold or a duplicate Relic (qty >= 2) to forge a Mythic Relic (Have %dg)!" % [FORGE_GOLD_COST, gold_coins]
+			if _combat_banner != null:
+				_combat_banner.text = err_msg
+			return {"error": "Insufficient gold or duplicate relics for Blacksmith Forge", "required_gold": FORGE_GOLD_COST, "current_gold": gold_coins, "message": err_msg}
+
+	var recipe: Dictionary = catalog[req]
+	var target_id: String = str(recipe["item_id"])
+	var b_dmg: int = int(recipe["bonus_damage"])
+	var b_hp: int = int(recipe["bonus_max_hp"])
+	var b_spd: float = float(recipe["bonus_speed"])
+
+	if loader != null and not loader.current_data.is_empty():
+		var found := false
+		for i in range(inventory.size()):
+			var existing: Dictionary = inventory[i]
+			if str(existing.get("item_id", "")) == target_id:
+				existing["quantity"] = int(existing.get("quantity", 1)) + 1
+				inventory[i] = existing
+				found = true
+				break
+		if not found:
+			inventory.append({
+				"item_id": target_id,
+				"name": str(recipe["name"]),
+				"quantity": 1,
+				"bonus_damage": b_dmg,
+				"bonus_max_hp": b_hp,
+				"bonus_speed": b_spd
+			})
+		loader.current_data["inventory"] = inventory
+		if b_hp > 0:
+			var h_dict: Dictionary = loader.current_data.get("health", {"current": 45, "max": 45})
+			h_dict["max"] = int(h_dict.get("max", 45)) + b_hp
+			h_dict["current"] = mini(int(h_dict["max"]), int(h_dict.get("current", 45)) + b_hp)
+			loader.current_data["health"] = h_dict
+		if loader.has_method("_cache_current_hero_state"):
+			loader._cache_current_hero_state()
+
+	total_mythics_forged += 1
+	if _forge_btn != null:
+		_forge_btn.text = "Forge (%d) [O]" % total_mythics_forged
+
+	spawn_particle_burst(FORGE_ANVIL_POS, Color(1.0, 0.72, 0.18), 22, 1.4)
+	spawn_particle_burst(player_pos, Color(1.0, 0.85, 0.25), 16, 1.25)
+	trigger_screen_shake(0.34)
+	spawn_floating_text(player_pos + Vector2(0, -24), "MYTHIC FORGED: %s!" % req.to_upper(), Color(1.0, 0.86, 0.24), true)
+	_play_sfx("relic_loot")
+
+	var cost_note := "Reforged Duplicate Relic" if consumed_duplicate else ("-%dg Gold" % gold_spent)
+	var msg := "[Blacksmith Forge -> %s [O]] Crafted %s (%s, Total Forged: %d)!" % [
+		req.to_upper(),
+		str(recipe["name"]),
+		cost_note,
+		total_mythics_forged
+	]
+	if _combat_banner != null:
+		_combat_banner.text = msg
+	arena_combat_event.emit(msg)
+	if loader != null:
+		loader.character_updated.emit(loader.current_data, msg)
+	_refresh_status_bar()
+	queue_redraw()
+	return {
+		"status": "mythic_forged",
+		"recipe_key": req,
+		"item_id": target_id,
+		"gold_spent": gold_spent,
+		"consumed_duplicate": consumed_duplicate,
+		"total_mythics_forged": total_mythics_forged,
+		"gold_remaining": gold_coins,
+		"arrow_damage": get_calculated_arrow_damage(),
+		"move_speed": get_calculated_move_speed(),
+		"message": msg
+	}
+
+
 func _build_arena_overlay() -> void:
 	_ui_layer = CanvasLayer.new()
 	_ui_layer.name = "ArenaOverlay"
@@ -2511,6 +2648,13 @@ func _build_arena_overlay() -> void:
 	_totem_btn.add_theme_font_size_override("font_size", 11)
 	_totem_btn.pressed.connect(func() -> void: deploy_arcane_totem())
 	row2.add_child(_totem_btn)
+
+	_forge_btn = Button.new()
+	_forge_btn.name = "BlacksmithForgeButton"
+	_forge_btn.text = "Forge (0) [O]"
+	_forge_btn.add_theme_font_size_override("font_size", 11)
+	_forge_btn.pressed.connect(func() -> void: forge_mythic_relic())
+	row2.add_child(_forge_btn)
 
 	var lvl_btn := Button.new()
 	lvl_btn.text = "Level Up [L]"
@@ -3590,6 +3734,8 @@ func _unhandled_input(event: InputEvent) -> void:
 				cycle_dungeon_mutator()
 			elif ke.keycode == KEY_H:
 				deploy_arcane_totem()
+			elif ke.keycode == KEY_O:
+				forge_mythic_relic()
 
 
 func _process(delta: float) -> void:
@@ -3963,6 +4109,14 @@ func _draw() -> void:
 		draw_texture_rect(obelisk_tex, Rect2(MUTATOR_OBELISK_POS - Vector2(22, 22), Vector2(44, 42)), false)
 	if font != null:
 		draw_string(font, MUTATOR_OBELISK_POS + Vector2(-72, -26), "Weather Obelisk [Y | %s]" % active_mutator.to_upper(), HORIZONTAL_ALIGNMENT_LEFT, -1, 10, mut_col.lightened(0.18))
+
+	var anvil_tex: Texture2D = sprite_gen.get_prop_texture("prop_anvil")
+	draw_circle(FORGE_ANVIL_POS + Vector2(0, 12), 20.0, Color(0.08, 0.04, 0.02, 0.65))
+	draw_arc(FORGE_ANVIL_POS, 26.0 + sin(_anim_time * 5.8) * 2.2, 0.0, TAU, 32, Color(1.0, 0.74, 0.20, 0.76), 2.0)
+	if anvil_tex != null:
+		draw_texture_rect(anvil_tex, Rect2(FORGE_ANVIL_POS - Vector2(22, 18), Vector2(44, 36)), false)
+	if font != null:
+		draw_string(font, FORGE_ANVIL_POS + Vector2(-68, -24), "Blacksmith Forge [O | %dg]" % FORGE_GOLD_COST, HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(1.0, 0.85, 0.35))
 
 	# 4C. Deployable Runic Crossfire Sentry Totems ([H] Key / prop_totem.png + +15% Attack Aura)
 	var totem_tex: Texture2D = sprite_gen.get_prop_texture("prop_totem")

@@ -927,22 +927,61 @@ func _process(_delta: float) -> bool:
 		printerr("FAIL: 2-Totem FIFO queue cap or 'deploy_totem' / 'step_totems' RPC failed: dep3=", dep_rpc_3, " step=", step_tot_rpc)
 		quit(1)
 		return true
-	print("PASS [63/64]: Bounded 2-Totem FIFO Queue & UDP RPCs verified (Active=%d/2, Total Deployed=%d, Total Crossfire Bolts=%d)." % [
+	print("PASS [63/66]: Bounded 2-Totem FIFO Queue & UDP RPCs verified (Active=%d/2, Total Deployed=%d, Total Crossfire Bolts=%d)." % [
 		int(tot_snap.get("active_totems_count", 0)),
 		int(tot_snap.get("total_totems_deployed", 0)),
 		int(tot_snap.get("total_totem_bolts_fired", 0))
 	])
 
-	# 64. Verify Failure Mode / Missing File Boundary Error Banner
+	# 64. Verify Relic Crafting & Blacksmith Forge ([O] Key / prop_anvil.png — 40 PNGs / forge_mythic_relic)
+	var pre_forge_dmg: int = arena.get_calculated_arrow_damage()
+	var pre_forge_hp: int = int(loader.current_data.get("health", {}).get("max", 45))
+	var forge_res_1: Dictionary = arena.forge_mythic_relic("mythic_ashblade")
+	var post_forge_dmg: int = arena.get_calculated_arrow_damage()
+	var post_forge_hp: int = int(loader.current_data.get("health", {}).get("max", 45))
+	if str(forge_res_1.get("status", "")) != "mythic_forged" or post_forge_dmg <= pre_forge_dmg or post_forge_hp < pre_forge_hp + 15 or arena.sprite_gen.textures.size() < 40:
+		printerr("FAIL: Blacksmith Forge [O] or prop_anvil.png failed: res=", forge_res_1, " sprites=", arena.sprite_gen.textures.size())
+		quit(1)
+		return true
+	print("PASS [64/66]: Blacksmith Forge [O] & prop_anvil.png Sprite verified (40 total PNGs, Mythic Ashblade Dmg %d->%d, Max HP %d->%d)." % [
+		pre_forge_dmg,
+		post_forge_dmg,
+		pre_forge_hp,
+		post_forge_hp
+	])
+
+	# 65. Verify "forge_mythic" UDP RPC ("mythic_stormstrider") & Insufficient-Resource Boundary Guard
+	var pre_forge_spd: float = arena.get_calculated_move_speed()
+	var forge_rpc: Dictionary = udp_bridge.execute_remote_command("forge_mythic", {"recipe": "mythic_stormstrider"})
+	var forge_snap: Dictionary = forge_rpc.get("snapshot", {})
+	var post_forge_spd: float = arena.get_calculated_move_speed()
+	var saved_gold: int = arena.gold_coins
+	arena.gold_coins = 0
+	for item in loader.current_data.get("inventory", []):
+		if item is Dictionary and int(item.get("quantity", 1)) >= 2:
+			item["quantity"] = 1
+	var low_forge_res: Dictionary = arena.forge_mythic_relic("mythic_aegis", false)
+	arena.gold_coins = saved_gold
+	if post_forge_spd < pre_forge_spd + 20.0 or int(forge_snap.get("total_mythics_forged", 0)) < 2 or not low_forge_res.has("error"):
+		printerr("FAIL: 'forge_mythic' UDP RPC or insufficient-resource guard failed: rpc=", forge_rpc, " low=", low_forge_res)
+		quit(1)
+		return true
+	print("PASS [65/66]: Blacksmith Forge 'forge_mythic' UDP RPC & Resource Boundary Guard verified (Speed %.0f->%.0f px/s, Total Forged=%d)." % [
+		pre_forge_spd,
+		post_forge_spd,
+		int(forge_snap.get("total_mythics_forged", 0))
+	])
+
+	# 66. Verify Failure Mode / Missing File Boundary Error Banner
 	hud.toggle_arena_mode()
 	var missing_res: Dictionary = loader.load_character_data("res://data/NonExistentChaosFile.json")
 	if not missing_res.is_empty() or not hud.error_banner.visible:
 		printerr("FAIL: Missing file error banner did not trigger.")
 		quit(1)
 		return true
-	print("PASS [64/64]: Missing-file error state verified -> ", hud.error_banner.text)
+	print("PASS [66/66]: Missing-file error state verified -> ", hud.error_banner.text)
 
-	print("=== ALL 64 HEADLESS HUD, ARENA, ROSTER, ULTIMATES, BOSS, RELICS, SFX, POTIONS, PILLARS, CRITS, ENEMY BOLTS, PARRY, HAZARDS, FRENZY, AI PILOT, PIXEL-ART SPRITES, DUNGEON CRAWLER, BOSS ENRAGE, ELEMENTAL INFUSIONS, MERCHANT SHOP, SPIKE TRAPS, MIMICS, RESPAWN [R], TALENT TREE [T], FLOOR DESCENT [X], BOUNTY BOARD [J], TITLE SCREEN, SPIRIT OWL FAMILIAR [Z], DPS TELEMETRY [K], CURSED GAMBITS [U], WEATHER MUTATORS [Y], SENTRY TOTEMS [H], UDP & SAVE/LOAD TESTS PASSED ===")
+	print("=== ALL 66 HEADLESS HUD, ARENA, ROSTER, ULTIMATES, BOSS, RELICS, SFX, POTIONS, PILLARS, CRITS, ENEMY BOLTS, PARRY, HAZARDS, FRENZY, AI PILOT, PIXEL-ART SPRITES, DUNGEON CRAWLER, BOSS ENRAGE, ELEMENTAL INFUSIONS, MERCHANT SHOP, SPIKE TRAPS, MIMICS, RESPAWN [R], TALENT TREE [T], FLOOR DESCENT [X], BOUNTY BOARD [J], TITLE SCREEN, SPIRIT OWL FAMILIAR [Z], DPS TELEMETRY [K], CURSED GAMBITS [U], WEATHER MUTATORS [Y], SENTRY TOTEMS [H], BLACKSMITH FORGE [O], UDP & SAVE/LOAD TESTS PASSED ===")
 	_main_instance.queue_free()
 	quit(0)
 	return true

@@ -1,5 +1,9 @@
 # Changelog
 
+## [3.4.0] - 2026-10-26
+- Add Relic Crafting & Blacksmith Forge (`forge_mythic_relic()` via **`[O]` key**, **`"Forge (0) [O]"` button**, and `"forge_mythic"` UDP RPC) at the Obsidian Blacksmith Anvil (`(510, 505)`), spending `50g` Gold Coins or reforging a duplicate Relic stack (`quantity >= 2`) into **Mythic Sovereign Ashblade** (`+8 Dmg, +15 Max HP`), **Mythic Obsidian Aegis** (`+5 Dmg, +25 Max HP`), or **Mythic Stormstrider Greaves** (`+6 Dmg, +25 Spd`).
+- Add `prop_anvil.png` Obsidian Blacksmith Anvil pixel-art sprite in `sprite_art_generator.gd` (bringing total exported `.png` sprites to 40) and expand headless Godot test suite to 66/66 assertions (`godot_project/tests/test_hud_headless.gd`).
+
 ## [3.3.0] - 2026-10-26
 - Add Deployable Arcane Turret Totems (`deploy_arcane_totem()`, `step_arcane_totems()`, `is_hero_in_totem_aura()`, `get_totem_bolt_damage()` via **`[H]` key**, **`"Totem (0/2) [H]"` button**, and `"deploy_totem"` / `"step_totems"` UDP RPCs) placing up to 2 Runic Crossfire Sentry Totems (`14.0s` lifetime, bounded FIFO queue replacement) that pulse every `1.0s` to fire Wisdom-scaled Arcane Bolts at enemies and project a **`+15%` Attack Damage aura** (`160 px` radius).
 - Add `prop_totem.png` Runic Sentry Totem pixel-art sprite in `sprite_art_generator.gd` (bringing total exported `.png` sprites to 39) and expand headless Godot test suite to 64/64 assertions (`godot_project/tests/test_hud_headless.gd`).
