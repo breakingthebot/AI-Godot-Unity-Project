@@ -894,22 +894,55 @@ func _process(_delta: float) -> bool:
 		printerr("FAIL: 'cycle_mutator' Blood Moon RPC failed: rpc=", mut_rpc)
 		quit(1)
 		return true
-	print("PASS [61/62]: Blood Moon Mutator & 'cycle_mutator' UDP RPC verified (Crit %.0f%%->%.0f%%, Total Mutator Shifts=%d)." % [
+	print("PASS [61/64]: Blood Moon Mutator & 'cycle_mutator' UDP RPC verified (Crit %.0f%%->%.0f%%, Total Mutator Shifts=%d)." % [
 		pre_blood_crit * 100.0,
 		post_blood_crit * 100.0,
 		int(mut_snap.get("total_mutator_shifts", 0))
 	])
 
-	# 62. Verify Failure Mode / Missing File Boundary Error Banner
+	# 62. Verify Deployable Arcane Turret Totems ([H] Key / prop_totem.png — 39 PNGs / +15% Attack Aura & Crossfire Bolts)
+	arena.dummies[0]["alive"] = true
+	arena.dummies[0]["hp"] = 80
+	arena.dummies[0]["pos"] = Vector2(540.0, 350.0)
+	var pre_totem_dmg: int = arena.get_calculated_arrow_damage()
+	var dep_res_1: Dictionary = arena.deploy_arcane_totem(arena.player_pos + Vector2(36.0, 0.0), true)
+	var post_totem_dmg: int = arena.get_calculated_arrow_damage()
+	var step_tot_res: Dictionary = arena.step_arcane_totems(1.1)
+	if str(dep_res_1.get("status", "")) != "totem_deployed" or not arena.is_hero_in_totem_aura() or post_totem_dmg <= pre_totem_dmg or int(step_tot_res.get("bolts_fired", 0)) < 1 or arena.sprite_gen.textures.size() < 39:
+		printerr("FAIL: Deployable Arcane Totem [H] or prop_totem.png failed: dep=", dep_res_1, " step=", step_tot_res, " sprites=", arena.sprite_gen.textures.size())
+		quit(1)
+		return true
+	print("PASS [62/64]: Runic Sentry Totem [H] & prop_totem.png Sprite verified (39 total PNGs, +15%% Aura Dmg %d->%d, Crossfire Bolts=%d)." % [
+		pre_totem_dmg,
+		post_totem_dmg,
+		arena.total_totem_bolts_fired
+	])
+
+	# 63. Verify Bounded 2-Totem FIFO Queue Replacement & "deploy_totem" / "step_totems" UDP RPCs
+	udp_bridge.execute_remote_command("deploy_totem", {"x": 320.0, "y": 310.0, "force_free": true})
+	var dep_rpc_3: Dictionary = udp_bridge.execute_remote_command("deploy_totem", {"x": 340.0, "y": 390.0, "force_free": true})
+	var step_tot_rpc: Dictionary = udp_bridge.execute_remote_command("step_totems", {"delta": 1.1})
+	var tot_snap: Dictionary = step_tot_rpc.get("snapshot", {})
+	if int(tot_snap.get("active_totems_count", 0)) != 2 or int(tot_snap.get("total_totems_deployed", 0)) != 3 or int(tot_snap.get("total_totem_bolts_fired", 0)) < 3:
+		printerr("FAIL: 2-Totem FIFO queue cap or 'deploy_totem' / 'step_totems' RPC failed: dep3=", dep_rpc_3, " step=", step_tot_rpc)
+		quit(1)
+		return true
+	print("PASS [63/64]: Bounded 2-Totem FIFO Queue & UDP RPCs verified (Active=%d/2, Total Deployed=%d, Total Crossfire Bolts=%d)." % [
+		int(tot_snap.get("active_totems_count", 0)),
+		int(tot_snap.get("total_totems_deployed", 0)),
+		int(tot_snap.get("total_totem_bolts_fired", 0))
+	])
+
+	# 64. Verify Failure Mode / Missing File Boundary Error Banner
 	hud.toggle_arena_mode()
 	var missing_res: Dictionary = loader.load_character_data("res://data/NonExistentChaosFile.json")
 	if not missing_res.is_empty() or not hud.error_banner.visible:
 		printerr("FAIL: Missing file error banner did not trigger.")
 		quit(1)
 		return true
-	print("PASS [62/62]: Missing-file error state verified -> ", hud.error_banner.text)
+	print("PASS [64/64]: Missing-file error state verified -> ", hud.error_banner.text)
 
-	print("=== ALL 62 HEADLESS HUD, ARENA, ROSTER, ULTIMATES, BOSS, RELICS, SFX, POTIONS, PILLARS, CRITS, ENEMY BOLTS, PARRY, HAZARDS, FRENZY, AI PILOT, PIXEL-ART SPRITES, DUNGEON CRAWLER, BOSS ENRAGE, ELEMENTAL INFUSIONS, MERCHANT SHOP, SPIKE TRAPS, MIMICS, RESPAWN [R], TALENT TREE [T], FLOOR DESCENT [X], BOUNTY BOARD [J], TITLE SCREEN, SPIRIT OWL FAMILIAR [Z], DPS TELEMETRY [K], CURSED GAMBITS [U], WEATHER MUTATORS [Y], UDP & SAVE/LOAD TESTS PASSED ===")
+	print("=== ALL 64 HEADLESS HUD, ARENA, ROSTER, ULTIMATES, BOSS, RELICS, SFX, POTIONS, PILLARS, CRITS, ENEMY BOLTS, PARRY, HAZARDS, FRENZY, AI PILOT, PIXEL-ART SPRITES, DUNGEON CRAWLER, BOSS ENRAGE, ELEMENTAL INFUSIONS, MERCHANT SHOP, SPIKE TRAPS, MIMICS, RESPAWN [R], TALENT TREE [T], FLOOR DESCENT [X], BOUNTY BOARD [J], TITLE SCREEN, SPIRIT OWL FAMILIAR [Z], DPS TELEMETRY [K], CURSED GAMBITS [U], WEATHER MUTATORS [Y], SENTRY TOTEMS [H], UDP & SAVE/LOAD TESTS PASSED ===")
 	_main_instance.queue_free()
 	quit(0)
 	return true

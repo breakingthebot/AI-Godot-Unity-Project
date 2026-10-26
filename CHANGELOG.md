@@ -1,5 +1,9 @@
 # Changelog
 
+## [3.3.0] - 2026-10-26
+- Add Deployable Arcane Turret Totems (`deploy_arcane_totem()`, `step_arcane_totems()`, `is_hero_in_totem_aura()`, `get_totem_bolt_damage()` via **`[H]` key**, **`"Totem (0/2) [H]"` button**, and `"deploy_totem"` / `"step_totems"` UDP RPCs) placing up to 2 Runic Crossfire Sentry Totems (`14.0s` lifetime, bounded FIFO queue replacement) that pulse every `1.0s` to fire Wisdom-scaled Arcane Bolts at enemies and project a **`+15%` Attack Damage aura** (`160 px` radius).
+- Add `prop_totem.png` Runic Sentry Totem pixel-art sprite in `sprite_art_generator.gd` (bringing total exported `.png` sprites to 39) and expand headless Godot test suite to 64/64 assertions (`godot_project/tests/test_hud_headless.gd`).
+
 ## [3.2.0] - 2026-10-26
 - Add Procedural Weather & Atmospheric Dungeon Mutators (`cycle_dungeon_mutator()`, `get_mutator_gold_multiplier()`, `get_mutator_mana_regen_rate()`, `_step_weather_atmosphere()` via **`[Y]` key**, **`"Mutator: CLEAR [Y]"` button**, and `"cycle_mutator"` UDP RPC) cycling through **Ashen Eclipse** (`+25%` Gold Coin drops from monsters & drifting ash embers), **Arcane Tempest** (`+50%` passive Mana regeneration rate & crackling sky-lightning), and **Blood Moon** (`+15%` Critical Hit Chance for all heroes & crimson mists).
 - Add `prop_mutator_obelisk.png` runic Weather Obelisk pixel-art sprite in `sprite_art_generator.gd` (bringing total exported `.png` sprites to 38) and expand headless Godot test suite to 62/62 assertions (`godot_project/tests/test_hud_headless.gd`).

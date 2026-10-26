@@ -292,6 +292,18 @@ func execute_remote_command(command_name: String, payload: Dictionary = {}) -> D
 				var mut_k: String = str(payload.get("mutator", ""))
 				var mut_res: Dictionary = arena.cycle_dungeon_mutator(mut_k)
 				action_note = "Remote RPC cycled Dungeon Mutator -> %s (Total shifts: %d)" % [str(mut_res.get("active_mutator", mut_res.get("error", "clear"))), int(mut_res.get("total_mutator_shifts", 0))]
+		"deploy_totem":
+			if arena != null and arena.has_method("deploy_arcane_totem"):
+				var tx: float = float(payload.get("x", -1.0))
+				var ty: float = float(payload.get("y", -1.0))
+				var f_free: bool = bool(payload.get("force_free", false))
+				var tot_res: Dictionary = arena.deploy_arcane_totem(Vector2(tx, ty), f_free)
+				action_note = "Remote RPC deployed Runic Sentry Totem -> #%d (Active: %d/%d)" % [int(tot_res.get("totem_id", 0)), int(tot_res.get("active_totems_count", 0)), 2]
+		"step_totems":
+			if arena != null and arena.has_method("step_arcane_totems"):
+				var t_dt: float = float(payload.get("delta", 1.1))
+				var st_res: Dictionary = arena.step_arcane_totems(t_dt)
+				action_note = "Remote RPC stepped Runic Sentry Totems -> %d bolts fired (Total: %d)" % [int(st_res.get("bolts_fired", 0)), int(st_res.get("total_totem_bolts_fired", 0))]
 		"toggle_mute":
 			if sfx_node != null and sfx_node.has_method("toggle_mute"):
 				var muted_now: bool = sfx_node.toggle_mute()
@@ -418,6 +430,10 @@ func build_telemetry_snapshot() -> Dictionary:
 		"total_mutator_shifts": int(arena.total_mutator_shifts) if arena != null else 0,
 		"mutator_gold_mult": snappedf(arena.get_mutator_gold_multiplier(), 0.01) if (arena != null and arena.has_method("get_mutator_gold_multiplier")) else 1.0,
 		"mutator_mana_regen_rate": snappedf(arena.get_mutator_mana_regen_rate(), 0.1) if (arena != null and arena.has_method("get_mutator_mana_regen_rate")) else 2.0,
+		"active_totems_count": arena.deployed_totems.size() if arena != null else 0,
+		"total_totems_deployed": int(arena.total_totems_deployed) if arena != null else 0,
+		"total_totem_bolts_fired": int(arena.total_totem_bolts_fired) if arena != null else 0,
+		"totem_aura_active": bool(arena.is_hero_in_totem_aura()) if (arena != null and arena.has_method("is_hero_in_totem_aura")) else false,
 		"sfx_muted": bool(sfx_node.muted) if sfx_node != null else false,
 		"total_sfx_played": int(sfx_node.total_sfx_played) if sfx_node != null else 0,
 		"high_wave_reached": int(loader.high_wave_reached) if loader != null else 1,

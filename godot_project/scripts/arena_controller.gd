@@ -194,6 +194,9 @@ var total_gambit_hp_sacrificed: int = 0
 var active_mutator: String = "clear"
 var total_mutator_shifts: int = 0
 var _weather_particle_accum: float = 0.0
+var deployed_totems: Array[Dictionary] = []
+var total_totems_deployed: int = 0
+var total_totem_bolts_fired: int = 0
 
 const FAMILIAR_ORBIT_RADIUS: float = 48.0
 const FAMILIAR_ORBIT_SPEED: float = 2.6
@@ -210,6 +213,13 @@ const DUNGEON_MUTATORS: Array[String] = ["clear", "ashen_eclipse", "arcane_tempe
 const ASHEN_ECLIPSE_GOLD_MULT: float = 1.25
 const ARCANE_TEMPEST_MANA_MULT: float = 1.50
 const BLOOD_MOON_CRIT_BONUS: float = 0.15
+const MAX_DEPLOYED_TOTEMS: int = 2
+const TOTEM_DURATION: float = 14.0
+const TOTEM_FIRE_INTERVAL: float = 1.0
+const TOTEM_AURA_RADIUS: float = 160.0
+const TOTEM_AURA_DAMAGE_MULT: float = 1.15
+const TOTEM_BASE_BOLT_DAMAGE: int = 12
+const TOTEM_MANA_COST: int = 8
 
 var _ui_layer: CanvasLayer
 var _status_label: Label
@@ -222,6 +232,7 @@ var _bounty_btn: Button
 var _familiar_btn: Button
 var _gambit_btn: Button
 var _mutator_btn: Button
+var _totem_btn: Button
 var _telemetry_btn: Button
 var _sfx_btn: Button
 
@@ -2108,6 +2119,165 @@ func _step_weather_atmosphere(delta: float) -> void:
 	total_particles_spawned += 1
 
 
+## Returns true when the hero stands within TOTEM_AURA_RADIUS (160 px) of at least one active Runic Sentry Totem.
+func is_hero_in_totem_aura() -> bool:
+	if deployed_totems.is_empty():
+		return false
+	for totem in deployed_totems:
+		var t_pos: Vector2 = totem.get("pos", Vector2.ZERO)
+		if t_pos.distance_to(player_pos) <= TOTEM_AURA_RADIUS:
+			return true
+	return false
+
+
+## Calculates the Arcane Bolt damage of each deployed Runic Sentry Totem, scaling with Wisdom and Dungeon Floor.
+func get_totem_bolt_damage() -> int:
+	var wis_mod: int = 0
+	if loader != null and not loader.current_data.is_empty() and loader.has_method("get_attribute_modifier"):
+		var attrs: Dictionary = loader.current_data.get("attributes", {})
+		wis_mod = maxi(0, int(loader.get_attribute_modifier(int(attrs.get("wisdom", 10)))))
+	return TOTEM_BASE_BOLT_DAMAGE + wis_mod * 2 + (dungeon_floor - 1) * 2
+
+
+## Deploys a Runic Crossfire Sentry Totem ([H] Key / "Totem [H]" Button / "deploy_totem" RPC) at world_pos (or near the hero),
+## enforcing a bounded 2-totem FIFO queue and projecting a +15% Attack Damage aura.
+func deploy_arcane_totem(world_pos: Vector2 = Vector2(-1.0, -1.0), force_free: bool = false) -> Dictionary:
+	var overcharge_rank: int = int(talents.get("overcharge", 0))
+	var discount: float = clampf(1.0 - float(overcharge_rank) * 0.25, 0.25, 1.0)
+	var mana_cost: int = 0 if force_free else maxi(2, int(round(float(TOTEM_MANA_COST) * discount)))
+
+	if not force_free and loader != null and not loader.current_data.is_empty():
+		var cur_mp: int = int(loader.current_data.get("mana", {}).get("current", 0))
+		if cur_mp < mana_cost:
+			var low_msg := "[Sentry Totem] Need %d MP to deploy Runic Totem (have %d MP)!" % [mana_cost, cur_mp]
+			if _combat_banner != null:
+				_combat_banner.text = low_msg
+			return {"error": "Insufficient mana for totem", "required_mp": mana_cost, "current_mp": cur_mp, "message": low_msg}
+		if loader.has_method("modify_mana"):
+			loader.modify_mana(-mana_cost, true)
+
+	var spawn_pos: Vector2 = world_pos
+	if spawn_pos.x < 0.0:
+		var offset_angle: float = float(total_totems_deployed % 2) * 0.65 - 0.32
+		var place_dir: Vector2 = aim_dir.rotated(offset_angle) if aim_dir.length_squared() > 0.001 else Vector2.RIGHT
+		spawn_pos = player_pos + place_dir * 42.0
+	spawn_pos.x = clampf(spawn_pos.x, ARENA_MIN_BOUNDS.x + 24.0, ARENA_MAX_BOUNDS.x - 24.0)
+	spawn_pos.y = clampf(spawn_pos.y, ARENA_MIN_BOUNDS.y + 24.0, ARENA_MAX_BOUNDS.y - 24.0)
+
+	# Bounded FIFO queue: if already at MAX_DEPLOYED_TOTEMS (2), replace the oldest totem
+	var replaced_oldest: bool = false
+	if deployed_totems.size() >= MAX_DEPLOYED_TOTEMS:
+		deployed_totems.pop_front()
+		replaced_oldest = true
+
+	total_totems_deployed += 1
+	var totem_entry := {
+		"id": total_totems_deployed,
+		"pos": spawn_pos,
+		"ttl": TOTEM_DURATION,
+		"max_ttl": TOTEM_DURATION,
+		"fire_accum": 0.0,
+		"bolts_fired": 0
+	}
+	deployed_totems.append(totem_entry)
+
+	if _totem_btn != null:
+		_totem_btn.text = "Totem (%d/%d) [H]" % [deployed_totems.size(), MAX_DEPLOYED_TOTEMS]
+
+	spawn_particle_burst(spawn_pos, Color(0.38, 0.96, 1.0), 18, 1.3)
+	trigger_screen_shake(0.22)
+	spawn_floating_text(spawn_pos + Vector2(0, -22), "SENTRY TOTEM #%d (+15%% DMG)!" % total_totems_deployed, Color(0.45, 0.98, 1.0), true)
+	_play_sfx("ultimate")
+
+	var msg := "[Runic Sentry Totem #%d Deployed! [H]] Active Totems: %d/%d (%d Crossfire Dmg/s, +15%% Hero Attack Aura within %d px)!" % [
+		total_totems_deployed,
+		deployed_totems.size(),
+		MAX_DEPLOYED_TOTEMS,
+		get_totem_bolt_damage(),
+		int(TOTEM_AURA_RADIUS)
+	]
+	if _combat_banner != null:
+		_combat_banner.text = msg
+	arena_combat_event.emit(msg)
+	_refresh_status_bar()
+	queue_redraw()
+	return {
+		"status": "totem_deployed",
+		"totem_id": total_totems_deployed,
+		"pos": spawn_pos,
+		"active_totems_count": deployed_totems.size(),
+		"total_totems_deployed": total_totems_deployed,
+		"replaced_oldest": replaced_oldest,
+		"totem_aura_active": is_hero_in_totem_aura(),
+		"bolt_damage": get_totem_bolt_damage(),
+		"message": msg
+	}
+
+
+## Steps all deployed Runic Sentry Totems: fires autonomous crossfire bolts at alive enemies and expires old totems.
+func step_arcane_totems(delta: float) -> Dictionary:
+	if deployed_totems.is_empty():
+		return {"active_totems_count": 0, "bolts_fired": 0}
+
+	var bolts_fired_now: int = 0
+	var remaining_totems: Array[Dictionary] = []
+	var bolt_dmg: int = get_totem_bolt_damage()
+
+	for totem in deployed_totems:
+		var t_pos: Vector2 = totem.get("pos", player_pos)
+		var ttl: float = float(totem.get("ttl", TOTEM_DURATION)) - delta
+		var f_acc: float = float(totem.get("fire_accum", 0.0)) + delta
+
+		while f_acc >= TOTEM_FIRE_INTERVAL:
+			f_acc -= TOTEM_FIRE_INTERVAL
+			var best_idx: int = -1
+			var best_dist: float = 680.0
+			for i in range(dummies.size()):
+				if not bool(dummies[i].get("alive", true)):
+					continue
+				var d_pos: Vector2 = dummies[i].get("pos", Vector2.ZERO)
+				var dist: float = t_pos.distance_to(d_pos)
+				if dist < best_dist:
+					best_dist = dist
+					best_idx = i
+			if best_idx >= 0:
+				var target_pos: Vector2 = dummies[best_idx].get("pos", Vector2.ZERO)
+				var dir: Vector2 = (target_pos - t_pos).normalized()
+				if dir.length_squared() < 0.001:
+					dir = Vector2.RIGHT
+				arrows.append({
+					"pos": t_pos + dir * 16.0,
+					"vel": dir * (ARROW_SPEED * 1.15),
+					"damage": bolt_dmg,
+					"is_crit": false,
+					"is_totem_bolt": true,
+					"ttl": 1.8
+				})
+				totem["bolts_fired"] = int(totem.get("bolts_fired", 0)) + 1
+				total_totem_bolts_fired += 1
+				bolts_fired_now += 1
+				spawn_particle_burst(t_pos, Color(0.42, 0.96, 1.0), 6, 0.85)
+				_play_sfx("shoot")
+
+		totem["ttl"] = ttl
+		totem["fire_accum"] = f_acc
+		if ttl > 0.0:
+			remaining_totems.append(totem)
+
+	var prev_count: int = deployed_totems.size()
+	deployed_totems = remaining_totems
+	if _totem_btn != null and deployed_totems.size() != prev_count:
+		_totem_btn.text = "Totem (%d/%d) [H]" % [deployed_totems.size(), MAX_DEPLOYED_TOTEMS]
+		_refresh_status_bar()
+
+	return {
+		"active_totems_count": deployed_totems.size(),
+		"bolts_fired": bolts_fired_now,
+		"total_totem_bolts_fired": total_totem_bolts_fired,
+		"totem_aura_active": is_hero_in_totem_aura()
+	}
+
+
 func _build_arena_overlay() -> void:
 	_ui_layer = CanvasLayer.new()
 	_ui_layer.name = "ArenaOverlay"
@@ -2334,6 +2504,13 @@ func _build_arena_overlay() -> void:
 	_mutator_btn.add_theme_font_size_override("font_size", 11)
 	_mutator_btn.pressed.connect(func() -> void: cycle_dungeon_mutator())
 	row2.add_child(_mutator_btn)
+
+	_totem_btn = Button.new()
+	_totem_btn.name = "DeployTotemButton"
+	_totem_btn.text = "Totem (0/2) [H]"
+	_totem_btn.add_theme_font_size_override("font_size", 11)
+	_totem_btn.pressed.connect(func() -> void: deploy_arcane_totem())
+	row2.add_child(_totem_btn)
 
 	var lvl_btn := Button.new()
 	lvl_btn.text = "Level Up [L]"
@@ -2802,7 +2979,10 @@ func get_calculated_arrow_damage() -> int:
 	var relic_dmg: int = 0
 	if loader.has_method("get_inventory_bonuses"):
 		relic_dmg = int(loader.get_inventory_bonuses().get("damage", 0))
-	return maxi(1, BASE_ARROW_DAMAGE + primary_rank + attr_mod + relic_dmg + shop_bonus_damage + gambit_bonus_damage)
+	var raw_dmg: int = maxi(1, BASE_ARROW_DAMAGE + primary_rank + attr_mod + relic_dmg + shop_bonus_damage + gambit_bonus_damage)
+	if is_hero_in_totem_aura():
+		raw_dmg = maxi(raw_dmg + 1, int(round(float(raw_dmg) * TOTEM_AURA_DAMAGE_MULT)))
+	return raw_dmg
 
 
 ## Calculates the active hero's Critical Hit chance (0.05 to 0.95) from Base(8%) + 3% per Dexterity/Wisdom modifier + 10% Frenzy bonus + Cursed Gambit bonus + Blood Moon Mutator bonus.
@@ -3408,6 +3588,8 @@ func _unhandled_input(event: InputEvent) -> void:
 				activate_cursed_gambit()
 			elif ke.keycode == KEY_Y:
 				cycle_dungeon_mutator()
+			elif ke.keycode == KEY_H:
+				deploy_arcane_totem()
 
 
 func _process(delta: float) -> void:
@@ -3472,12 +3654,14 @@ func _process(delta: float) -> void:
 	if ai_pilot_active:
 		step_ai_pilot(delta)
 
-	# Step Environmental Hazard & Sanctuary Zones, Spike Traps, Elemental Statuses, Familiar Owl, and Coin Drops
+	# Step Environmental Hazard & Sanctuary Zones, Spike Traps, Elemental Statuses, Familiar Owl, Totems, and Coin Drops
 	step_hazard_zones(delta)
 	step_spike_traps(delta)
 	step_elemental_statuses(delta)
 	if familiar_active:
 		step_familiar(delta)
+	if not deployed_totems.is_empty():
+		step_arcane_totems(delta)
 	step_coin_drops(delta)
 
 	# 2. Wave Survival / Awakened Mimic Enemy AI Pursuit & Contact Check
@@ -3779,6 +3963,26 @@ func _draw() -> void:
 		draw_texture_rect(obelisk_tex, Rect2(MUTATOR_OBELISK_POS - Vector2(22, 22), Vector2(44, 42)), false)
 	if font != null:
 		draw_string(font, MUTATOR_OBELISK_POS + Vector2(-72, -26), "Weather Obelisk [Y | %s]" % active_mutator.to_upper(), HORIZONTAL_ALIGNMENT_LEFT, -1, 10, mut_col.lightened(0.18))
+
+	# 4C. Deployable Runic Crossfire Sentry Totems ([H] Key / prop_totem.png + +15% Attack Aura)
+	var totem_tex: Texture2D = sprite_gen.get_prop_texture("prop_totem")
+	for totem in deployed_totems:
+		var t_pos: Vector2 = totem.get("pos", Vector2.ZERO)
+		var t_ttl: float = float(totem.get("ttl", TOTEM_DURATION))
+		var t_max_ttl: float = maxf(0.1, float(totem.get("max_ttl", TOTEM_DURATION)))
+		var ttl_ratio: float = clampf(t_ttl / t_max_ttl, 0.0, 1.0)
+		draw_circle(t_pos, TOTEM_AURA_RADIUS, Color(0.22, 0.78, 0.95, 0.06))
+		draw_arc(t_pos, TOTEM_AURA_RADIUS, 0.0, TAU, 40, Color(0.38, 0.94, 1.0, 0.35), 1.6)
+		draw_circle(t_pos + Vector2(0, 12), 16.0, Color(0.03, 0.05, 0.08, 0.60))
+		draw_arc(t_pos, 22.0 + sin(_anim_time * 8.0) * 2.0, 0.0, TAU, 28, Color(0.45, 0.98, 1.0, 0.85), 2.0)
+		if totem_tex != null:
+			draw_texture_rect(totem_tex, Rect2(t_pos - Vector2(20, 20), Vector2(40, 38)), false)
+		else:
+			draw_circle(t_pos, 14.0, Color(0.38, 0.92, 1.0))
+		draw_rect(Rect2(t_pos + Vector2(-20, -26), Vector2(40, 4)), Color(0.10, 0.14, 0.18), true)
+		draw_rect(Rect2(t_pos + Vector2(-20, -26), Vector2(40.0 * ttl_ratio, 4)), Color(0.42, 0.96, 1.0), true)
+		if font != null:
+			draw_string(font, t_pos + Vector2(-56, -30), "SENTRY TOTEM [H] (%.1fs)" % t_ttl, HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(0.55, 0.98, 1.0))
 
 	var coin_tex: Texture2D = sprite_gen.get_prop_texture("prop_coin")
 	for coin in coin_drops:
