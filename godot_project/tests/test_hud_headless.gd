@@ -860,23 +860,56 @@ func _process(_delta: float) -> bool:
 		quit(1)
 		return true
 	loader.modify_health(999)
-	print("PASS [59/60]: Cursed Shrine 'activate_gambit' UDP RPC & 1 HP Non-Lethal Guard verified (Gold +%dg, Relics %d->%d, Total Gambits=%d)." % [
+	print("PASS [59/62]: Cursed Shrine 'activate_gambit' UDP RPC & 1 HP Non-Lethal Guard verified (Gold +%dg, Relics %d->%d, Total Gambits=%d)." % [
 		arena.gold_coins - pre_plunder_gold,
 		pre_plunder_relics,
 		post_plunder_relics,
 		int(gambit_snap.get("total_gambits_activated", 0))
 	])
 
-	# 60. Verify Failure Mode / Missing File Boundary Error Banner
+	# 60. Verify Procedural Weather & Atmospheric Dungeon Mutators ([Y] Key / prop_mutator_obelisk.png — 38 PNGs)
+	var base_mana_rate: float = arena.get_mutator_mana_regen_rate()
+	var eclipse_res: Dictionary = arena.cycle_dungeon_mutator("ashen_eclipse")
+	var pre_eclipse_gold: int = arena.gold_coins
+	arena.spawn_coin_drop(arena.player_pos, 20, true)
+	var eclipse_gold_gain: int = arena.gold_coins - pre_eclipse_gold
+	var tempest_res: Dictionary = arena.cycle_dungeon_mutator("arcane_tempest")
+	var tempest_mana_rate: float = arena.get_mutator_mana_regen_rate()
+	if str(eclipse_res.get("active_mutator", "")) != "ashen_eclipse" or eclipse_gold_gain != 25 or str(tempest_res.get("active_mutator", "")) != "arcane_tempest" or tempest_mana_rate <= base_mana_rate or arena.sprite_gen.textures.size() < 38:
+		printerr("FAIL: Atmospheric Dungeon Mutators [Y] or prop_mutator_obelisk.png failed: eclipse=", eclipse_res, " gold_gain=", eclipse_gold_gain, " tempest=", tempest_res, " sprites=", arena.sprite_gen.textures.size())
+		quit(1)
+		return true
+	print("PASS [60/62]: Atmospheric Dungeon Mutators [Y] & Weather Obelisk Sprite verified (38 total PNGs, Eclipse Gold +20g->+%dg, Tempest MP Regen %.1f->%.1f/s)." % [
+		eclipse_gold_gain,
+		base_mana_rate,
+		tempest_mana_rate
+	])
+
+	# 61. Verify Blood Moon Mutator (+15% Crit Chance) & "cycle_mutator" UDP RPC
+	var pre_blood_crit: float = arena.get_calculated_crit_chance()
+	var mut_rpc: Dictionary = udp_bridge.execute_remote_command("cycle_mutator", {"mutator": "blood_moon"})
+	var mut_snap: Dictionary = mut_rpc.get("snapshot", {})
+	var post_blood_crit: float = arena.get_calculated_crit_chance()
+	if str(mut_snap.get("active_mutator", "")) != "blood_moon" or post_blood_crit <= pre_blood_crit or int(mut_snap.get("total_mutator_shifts", 0)) < 3:
+		printerr("FAIL: 'cycle_mutator' Blood Moon RPC failed: rpc=", mut_rpc)
+		quit(1)
+		return true
+	print("PASS [61/62]: Blood Moon Mutator & 'cycle_mutator' UDP RPC verified (Crit %.0f%%->%.0f%%, Total Mutator Shifts=%d)." % [
+		pre_blood_crit * 100.0,
+		post_blood_crit * 100.0,
+		int(mut_snap.get("total_mutator_shifts", 0))
+	])
+
+	# 62. Verify Failure Mode / Missing File Boundary Error Banner
 	hud.toggle_arena_mode()
 	var missing_res: Dictionary = loader.load_character_data("res://data/NonExistentChaosFile.json")
 	if not missing_res.is_empty() or not hud.error_banner.visible:
 		printerr("FAIL: Missing file error banner did not trigger.")
 		quit(1)
 		return true
-	print("PASS [60/60]: Missing-file error state verified -> ", hud.error_banner.text)
+	print("PASS [62/62]: Missing-file error state verified -> ", hud.error_banner.text)
 
-	print("=== ALL 60 HEADLESS HUD, ARENA, ROSTER, ULTIMATES, BOSS, RELICS, SFX, POTIONS, PILLARS, CRITS, ENEMY BOLTS, PARRY, HAZARDS, FRENZY, AI PILOT, PIXEL-ART SPRITES, DUNGEON CRAWLER, BOSS ENRAGE, ELEMENTAL INFUSIONS, MERCHANT SHOP, SPIKE TRAPS, MIMICS, RESPAWN [R], TALENT TREE [T], FLOOR DESCENT [X], BOUNTY BOARD [J], TITLE SCREEN, SPIRIT OWL FAMILIAR [Z], DPS TELEMETRY [K], CURSED GAMBITS [U], UDP & SAVE/LOAD TESTS PASSED ===")
+	print("=== ALL 62 HEADLESS HUD, ARENA, ROSTER, ULTIMATES, BOSS, RELICS, SFX, POTIONS, PILLARS, CRITS, ENEMY BOLTS, PARRY, HAZARDS, FRENZY, AI PILOT, PIXEL-ART SPRITES, DUNGEON CRAWLER, BOSS ENRAGE, ELEMENTAL INFUSIONS, MERCHANT SHOP, SPIKE TRAPS, MIMICS, RESPAWN [R], TALENT TREE [T], FLOOR DESCENT [X], BOUNTY BOARD [J], TITLE SCREEN, SPIRIT OWL FAMILIAR [Z], DPS TELEMETRY [K], CURSED GAMBITS [U], WEATHER MUTATORS [Y], UDP & SAVE/LOAD TESTS PASSED ===")
 	_main_instance.queue_free()
 	quit(0)
 	return true

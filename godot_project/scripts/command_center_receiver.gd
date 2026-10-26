@@ -283,8 +283,15 @@ func execute_remote_command(command_name: String, payload: Dictionary = {}) -> D
 		"activate_gambit":
 			if arena != null and arena.has_method("activate_cursed_gambit"):
 				var p_key: String = str(payload.get("pact_key", ""))
+				if p_key.is_empty():
+					p_key = str(payload.get("pact", ""))
 				var gm_res: Dictionary = arena.activate_cursed_gambit(p_key)
 				action_note = "Remote RPC activated Cursed Gambit -> %s (Total: %d)" % [str(gm_res.get("pact_key", gm_res.get("error", "none"))), int(gm_res.get("total_gambits_activated", 0))]
+		"cycle_mutator":
+			if arena != null and arena.has_method("cycle_dungeon_mutator"):
+				var mut_k: String = str(payload.get("mutator", ""))
+				var mut_res: Dictionary = arena.cycle_dungeon_mutator(mut_k)
+				action_note = "Remote RPC cycled Dungeon Mutator -> %s (Total shifts: %d)" % [str(mut_res.get("active_mutator", mut_res.get("error", "clear"))), int(mut_res.get("total_mutator_shifts", 0))]
 		"toggle_mute":
 			if sfx_node != null and sfx_node.has_method("toggle_mute"):
 				var muted_now: bool = sfx_node.toggle_mute()
@@ -407,6 +414,10 @@ func build_telemetry_snapshot() -> Dictionary:
 		"total_gambit_hp_sacrificed": int(arena.total_gambit_hp_sacrificed) if arena != null else 0,
 		"gambit_bonus_damage": int(arena.gambit_bonus_damage) if arena != null else 0,
 		"gambit_bonus_crit_pct": int(round(arena.gambit_bonus_crit * 100.0)) if arena != null else 0,
+		"active_mutator": str(arena.active_mutator) if arena != null else "clear",
+		"total_mutator_shifts": int(arena.total_mutator_shifts) if arena != null else 0,
+		"mutator_gold_mult": snappedf(arena.get_mutator_gold_multiplier(), 0.01) if (arena != null and arena.has_method("get_mutator_gold_multiplier")) else 1.0,
+		"mutator_mana_regen_rate": snappedf(arena.get_mutator_mana_regen_rate(), 0.1) if (arena != null and arena.has_method("get_mutator_mana_regen_rate")) else 2.0,
 		"sfx_muted": bool(sfx_node.muted) if sfx_node != null else false,
 		"total_sfx_played": int(sfx_node.total_sfx_played) if sfx_node != null else 0,
 		"high_wave_reached": int(loader.high_wave_reached) if loader != null else 1,

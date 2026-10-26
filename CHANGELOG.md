@@ -1,5 +1,9 @@
 # Changelog
 
+## [3.2.0] - 2026-10-26
+- Add Procedural Weather & Atmospheric Dungeon Mutators (`cycle_dungeon_mutator()`, `get_mutator_gold_multiplier()`, `get_mutator_mana_regen_rate()`, `_step_weather_atmosphere()` via **`[Y]` key**, **`"Mutator: CLEAR [Y]"` button**, and `"cycle_mutator"` UDP RPC) cycling through **Ashen Eclipse** (`+25%` Gold Coin drops from monsters & drifting ash embers), **Arcane Tempest** (`+50%` passive Mana regeneration rate & crackling sky-lightning), and **Blood Moon** (`+15%` Critical Hit Chance for all heroes & crimson mists).
+- Add `prop_mutator_obelisk.png` runic Weather Obelisk pixel-art sprite in `sprite_art_generator.gd` (bringing total exported `.png` sprites to 38) and expand headless Godot test suite to 62/62 assertions (`godot_project/tests/test_hud_headless.gd`).
+
 ## [3.1.0] - 2026-10-25
 - Add Cursed Shrine Gambits & High-Risk / High-Reward Corruptions (`activate_cursed_gambit()` via **`[U]` key**, **`"Gambit (0) [U]"` button**, and `"activate_gambit"` UDP RPC) sacrificing `25%` current HP (clamped with a non-lethal `1 HP` floor) in exchange for rotating permanent corruptions: **Pact of Blood Might** (`+4` permanent Base Attack Damage), **Pact of Shadow Fury** (`+15%` permanent Critical Hit Chance), and **Pact of Forbidden Plunder** (`+60g` Gold Coins & `+1` Guaranteed Relic).
 - Add `prop_cursed_altar.png` crimson skull-carved Blood Altar sprite in `sprite_art_generator.gd` (bringing total exported `.png` sprites to 37) and expand headless Godot test suite to 60/60 assertions (`godot_project/tests/test_hud_headless.gd`).

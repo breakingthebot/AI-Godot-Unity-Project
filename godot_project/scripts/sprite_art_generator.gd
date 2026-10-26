@@ -58,6 +58,7 @@ func build_all_sprites(save_to_disk: bool = true) -> void:
 	_register_pattern("prop_stairs", _PROP_STAIRS, _PALETTE_DOOR, save_to_disk)
 	_register_pattern("prop_bounty_board", _PROP_BOUNTY_BOARD, _PALETTE_MERCHANT, save_to_disk)
 	_register_pattern("prop_cursed_altar", _PROP_CURSED_ALTAR, _PALETTE_TRAP, save_to_disk)
+	_register_pattern("prop_mutator_obelisk", _PROP_MUTATOR_OBELISK, _PALETTE_PILLAR, save_to_disk)
 	_register_pattern("ui_crest_emblem", _UI_CREST_EMBLEM, _PALETTE_MERCHANT, save_to_disk)
 	_register_pattern("npc_merchant", _NPC_MERCHANT, _PALETTE_MERCHANT, save_to_disk)
 	_register_pattern("prop_coin", _PROP_COIN, _PALETTE_MERCHANT, save_to_disk)
@@ -878,5 +879,21 @@ const _PROP_CURSED_ALTAR: Array[String] = [
 	".OOMMDDDDDDMMOO.",
 	"OMDDDDDDDDDDDDMO",
 	"OMMDDDDDDDDDDMMO",
+	".OOOOOOOOOOOOOO."
+]
+
+const _PROP_MUTATOR_OBELISK: Array[String] = [
+	"......OOOO......",
+	".....OLCCLO.....",
+	"....OSCCCCSO....",
+	"...OSDCCCCDSO...",
+	"...OSDCLLCDSO...",
+	"..OOSDCCCCDSOO..",
+	"..OSDCCCCCCDSO..",
+	"..OSDDCCCCDDSO..",
+	"..OSDDDLLLDDDSO.",
+	".OOSDDDCCCCDDDSO",
+	"OSDDDDDDDDDDDDDS",
+	"OLLSSSSSSSSSSLLO",
 	".OOOOOOOOOOOOOO."
 ]

@@ -191,6 +191,9 @@ var gambit_bonus_damage: int = 0
 var gambit_bonus_crit: float = 0.0
 var total_gambits_activated: int = 0
 var total_gambit_hp_sacrificed: int = 0
+var active_mutator: String = "clear"
+var total_mutator_shifts: int = 0
+var _weather_particle_accum: float = 0.0
 
 const FAMILIAR_ORBIT_RADIUS: float = 48.0
 const FAMILIAR_ORBIT_SPEED: float = 2.6
@@ -202,6 +205,11 @@ const DPS_ROLLING_WINDOW_SECONDS: float = 5.0
 const CURSED_ALTAR_POS: Vector2 = Vector2(360.0, 505.0)
 const GAMBIT_HP_COST_RATIO: float = 0.25
 const CURSED_GAMBITS: Array[String] = ["blood_might", "shadow_fury", "plunder_pact"]
+const MUTATOR_OBELISK_POS: Vector2 = Vector2(660.0, 505.0)
+const DUNGEON_MUTATORS: Array[String] = ["clear", "ashen_eclipse", "arcane_tempest", "blood_moon"]
+const ASHEN_ECLIPSE_GOLD_MULT: float = 1.25
+const ARCANE_TEMPEST_MANA_MULT: float = 1.50
+const BLOOD_MOON_CRIT_BONUS: float = 0.15
 
 var _ui_layer: CanvasLayer
 var _status_label: Label
@@ -213,6 +221,7 @@ var _talent_btn: Button
 var _bounty_btn: Button
 var _familiar_btn: Button
 var _gambit_btn: Button
+var _mutator_btn: Button
 var _telemetry_btn: Button
 var _sfx_btn: Button
 
@@ -1276,7 +1285,7 @@ func step_elemental_statuses(delta: float) -> Dictionary:
 
 ## Spawns a gleaming Gold Coin drop on the dungeon floor and credits gold to the hero's pouch.
 func spawn_coin_drop(world_pos: Vector2, amount: int, auto_credit: bool = false) -> Dictionary:
-	var val: int = maxi(1, amount)
+	var val: int = maxi(1, int(round(float(maxi(1, amount)) * get_mutator_gold_multiplier())))
 	if auto_credit:
 		gold_coins += val
 		total_gold_earned += val
@@ -1991,6 +2000,114 @@ func activate_cursed_gambit(pact_key: String = "") -> Dictionary:
 	}
 
 
+## Returns the active Atmospheric Mutator gold drop multiplier (1.25x during Ashen Eclipse, 1.0x otherwise).
+func get_mutator_gold_multiplier() -> float:
+	return ASHEN_ECLIPSE_GOLD_MULT if active_mutator == "ashen_eclipse" else 1.0
+
+
+## Returns the hero's passive Mana regeneration rate in MP/sec (boosted +50% during Arcane Tempest).
+func get_mutator_mana_regen_rate() -> float:
+	var base_rate: float = float(MANA_REGEN_AMOUNT) / maxf(0.05, MANA_REGEN_INTERVAL)
+	return base_rate * ARCANE_TEMPEST_MANA_MULT if active_mutator == "arcane_tempest" else base_rate
+
+
+## Cycles or sets the Procedural Weather & Atmospheric Dungeon Mutator ([Y] Key / "Mutator [Y]" Button / "cycle_mutator" RPC).
+func cycle_dungeon_mutator(requested_mutator: String = "") -> Dictionary:
+	var catalog := {
+		"clear": "Clear Citadel Skies (Baseline Dungeon Conditions)",
+		"ashen_eclipse": "Ashen Eclipse (+25% Gold Drops from All Monsters & Drifting Ash Embers)",
+		"arcane_tempest": "Arcane Tempest (+50% Passive Mana Regen & Crackling Sky-Lightning)",
+		"blood_moon": "Blood Moon (+15% Critical Hit Chance for All Heroes & Crimson Mists)"
+	}
+	var short_labels := {
+		"clear": "CLEAR",
+		"ashen_eclipse": "ECLIPSE",
+		"arcane_tempest": "TEMPEST",
+		"blood_moon": "BLOOD"
+	}
+	var req := requested_mutator.strip_edges().to_lower()
+	if req.is_empty():
+		var curr_idx: int = DUNGEON_MUTATORS.find(active_mutator)
+		active_mutator = DUNGEON_MUTATORS[(curr_idx + 1) % DUNGEON_MUTATORS.size()]
+	elif catalog.has(req):
+		active_mutator = req
+	else:
+		return {"error": "Unknown dungeon mutator '%s'" % req}
+
+	total_mutator_shifts += 1
+	var short_tag: String = str(short_labels.get(active_mutator, "CLEAR"))
+	if _mutator_btn != null:
+		_mutator_btn.text = "Mutator: %s [Y]" % short_tag
+
+	var burst_col := Color(0.75, 0.85, 0.95)
+	var popup_txt := "SKIES CLEARED!"
+	match active_mutator:
+		"ashen_eclipse":
+			burst_col = Color(1.0, 0.78, 0.25)
+			popup_txt = "ASHEN ECLIPSE (+25% GOLD)!"
+		"arcane_tempest":
+			burst_col = Color(0.42, 0.94, 1.0)
+			popup_txt = "ARCANE TEMPEST (+50% MP REGEN)!"
+		"blood_moon":
+			burst_col = Color(0.98, 0.24, 0.34)
+			popup_txt = "BLOOD MOON (+15% CRIT)!"
+
+	spawn_particle_burst(MUTATOR_OBELISK_POS, burst_col, 18, 1.35)
+	spawn_particle_burst(player_pos, burst_col, 14, 1.2)
+	trigger_screen_shake(0.26)
+	spawn_floating_text(player_pos + Vector2(0, -24), popup_txt, burst_col, true)
+	_play_sfx("level_up")
+
+	var msg := "[Atmospheric Mutator -> %s [Y]] %s!" % [
+		active_mutator.to_upper(),
+		str(catalog[active_mutator])
+	]
+	if _combat_banner != null:
+		_combat_banner.text = msg
+	arena_combat_event.emit(msg)
+	_refresh_status_bar()
+	queue_redraw()
+	return {
+		"status": "mutator_changed",
+		"active_mutator": active_mutator,
+		"total_mutator_shifts": total_mutator_shifts,
+		"gold_multiplier": get_mutator_gold_multiplier(),
+		"mana_regen_rate": get_mutator_mana_regen_rate(),
+		"crit_chance_pct": int(round(get_calculated_crit_chance() * 100.0)),
+		"description": str(catalog[active_mutator]),
+		"message": msg
+	}
+
+
+## Spawns ambient atmospheric weather particles across the Arena floor when a Dungeon Mutator is active.
+func _step_weather_atmosphere(delta: float) -> void:
+	if active_mutator == "clear":
+		return
+	_weather_particle_accum += delta
+	if _weather_particle_accum < 0.18:
+		return
+	_weather_particle_accum = 0.0
+	var wx := randf_range(ARENA_MIN_BOUNDS.x + 20.0, ARENA_MAX_BOUNDS.x - 20.0)
+	var wy := randf_range(ARENA_MIN_BOUNDS.y + 20.0, ARENA_MAX_BOUNDS.y - 20.0)
+	var w_col := Color(1.0, 0.76, 0.28)
+	var w_vel := Vector2(randf_range(-28.0, -12.0), randf_range(18.0, 36.0))
+	if active_mutator == "arcane_tempest":
+		w_col = Color(0.45, 0.95, 1.0)
+		w_vel = Vector2(randf_range(-18.0, 18.0), randf_range(45.0, 85.0))
+	elif active_mutator == "blood_moon":
+		w_col = Color(0.96, 0.22, 0.32)
+		w_vel = Vector2(randf_range(-14.0, 14.0), randf_range(-34.0, -16.0))
+	particles.append({
+		"pos": Vector2(wx, wy),
+		"vel": w_vel,
+		"color": w_col,
+		"size": 3.5,
+		"ttl": 0.65,
+		"max_ttl": 0.65
+	})
+	total_particles_spawned += 1
+
+
 func _build_arena_overlay() -> void:
 	_ui_layer = CanvasLayer.new()
 	_ui_layer.name = "ArenaOverlay"
@@ -2210,6 +2327,13 @@ func _build_arena_overlay() -> void:
 	_gambit_btn.add_theme_font_size_override("font_size", 11)
 	_gambit_btn.pressed.connect(func() -> void: activate_cursed_gambit())
 	row2.add_child(_gambit_btn)
+
+	_mutator_btn = Button.new()
+	_mutator_btn.name = "DungeonMutatorButton"
+	_mutator_btn.text = "Mutator: CLEAR [Y]"
+	_mutator_btn.add_theme_font_size_override("font_size", 11)
+	_mutator_btn.pressed.connect(func() -> void: cycle_dungeon_mutator())
+	row2.add_child(_mutator_btn)
 
 	var lvl_btn := Button.new()
 	lvl_btn.text = "Level Up [L]"
@@ -2681,7 +2805,7 @@ func get_calculated_arrow_damage() -> int:
 	return maxi(1, BASE_ARROW_DAMAGE + primary_rank + attr_mod + relic_dmg + shop_bonus_damage + gambit_bonus_damage)
 
 
-## Calculates the active hero's Critical Hit chance (0.05 to 0.95) from Base(8%) + 3% per Dexterity/Wisdom modifier + 10% Frenzy bonus + Cursed Gambit bonus.
+## Calculates the active hero's Critical Hit chance (0.05 to 0.95) from Base(8%) + 3% per Dexterity/Wisdom modifier + 10% Frenzy bonus + Cursed Gambit bonus + Blood Moon Mutator bonus.
 func get_calculated_crit_chance() -> float:
 	if loader == null or loader.current_data.is_empty():
 		return BASE_CRIT_CHANCE
@@ -2690,7 +2814,8 @@ func get_calculated_crit_chance() -> float:
 	var wis_mod: int = loader.get_attribute_modifier(int(attrs.get("wisdom", 10)))
 	var best_mod: int = maxi(0, maxi(dex_mod, wis_mod))
 	var frenzy_bonus: float = FRENZY_CRIT_BONUS if is_frenzy_active() else 0.0
-	return clampf(BASE_CRIT_CHANCE + float(best_mod) * CRIT_PER_MOD + frenzy_bonus + gambit_bonus_crit, 0.05, 0.95)
+	var mutator_crit: float = BLOOD_MOON_CRIT_BONUS if active_mutator == "blood_moon" else 0.0
+	return clampf(BASE_CRIT_CHANCE + float(best_mod) * CRIT_PER_MOD + frenzy_bonus + gambit_bonus_crit + mutator_crit, 0.05, 0.95)
 
 
 ## Rolls whether an attack is a Critical Hit (2x damage), respecting force_next_crit for deterministic testing.
@@ -3281,6 +3406,8 @@ func _unhandled_input(event: InputEvent) -> void:
 				toggle_telemetry_overlay()
 			elif ke.keycode == KEY_U:
 				activate_cursed_gambit()
+			elif ke.keycode == KEY_Y:
+				cycle_dungeon_mutator()
 
 
 func _process(delta: float) -> void:
@@ -3307,13 +3434,15 @@ func _process(delta: float) -> void:
 			combo_count = 0
 			_refresh_status_bar()
 
-	# Passive Mana regeneration in the arena
-	_mana_regen_accum += delta
+	# Passive Mana regeneration in the arena (boosted +50% during Arcane Tempest Mutator)
+	var mana_speed_mult: float = ARCANE_TEMPEST_MANA_MULT if active_mutator == "arcane_tempest" else 1.0
+	_mana_regen_accum += delta * mana_speed_mult
 	if _mana_regen_accum >= MANA_REGEN_INTERVAL:
 		_mana_regen_accum -= MANA_REGEN_INTERVAL
 		if loader != null and loader.has_method("modify_mana"):
 			loader.modify_mana(MANA_REGEN_AMOUNT, true)
 			_refresh_status_bar()
+	_step_weather_atmosphere(delta)
 
 	# 1. Poll WASD / Arrow Keys for smooth 8-way movement
 	var move_vec := Vector2.ZERO
@@ -3632,6 +3761,24 @@ func _draw() -> void:
 		draw_texture_rect(altar_tex, Rect2(CURSED_ALTAR_POS - Vector2(22, 20), Vector2(44, 40)), false)
 	if font != null:
 		draw_string(font, CURSED_ALTAR_POS + Vector2(-68, -24), "Cursed Altar [U | -25% HP]", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(1.0, 0.38, 0.45))
+
+	var obelisk_tex: Texture2D = sprite_gen.get_prop_texture("prop_mutator_obelisk")
+	var mut_col := Color(0.55, 0.88, 1.0, 0.68)
+	if active_mutator == "ashen_eclipse":
+		mut_col = Color(1.0, 0.78, 0.25, 0.85)
+		draw_rect(arena_rect, Color(0.28, 0.18, 0.04, 0.08), true)
+	elif active_mutator == "arcane_tempest":
+		mut_col = Color(0.42, 0.94, 1.0, 0.88)
+		draw_rect(arena_rect, Color(0.06, 0.22, 0.36, 0.09), true)
+	elif active_mutator == "blood_moon":
+		mut_col = Color(0.98, 0.22, 0.34, 0.88)
+		draw_rect(arena_rect, Color(0.32, 0.04, 0.08, 0.09), true)
+	draw_circle(MUTATOR_OBELISK_POS + Vector2(0, 12), 20.0, Color(0.03, 0.05, 0.08, 0.65))
+	draw_arc(MUTATOR_OBELISK_POS, 26.0 + cos(_anim_time * 6.0) * 2.5, 0.0, TAU, 32, mut_col, 2.0)
+	if obelisk_tex != null:
+		draw_texture_rect(obelisk_tex, Rect2(MUTATOR_OBELISK_POS - Vector2(22, 22), Vector2(44, 42)), false)
+	if font != null:
+		draw_string(font, MUTATOR_OBELISK_POS + Vector2(-72, -26), "Weather Obelisk [Y | %s]" % active_mutator.to_upper(), HORIZONTAL_ALIGNMENT_LEFT, -1, 10, mut_col.lightened(0.18))
 
 	var coin_tex: Texture2D = sprite_gen.get_prop_texture("prop_coin")
 	for coin in coin_drops:
