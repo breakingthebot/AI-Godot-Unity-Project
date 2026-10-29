@@ -966,22 +966,53 @@ func _process(_delta: float) -> bool:
 		printerr("FAIL: 'forge_mythic' UDP RPC or insufficient-resource guard failed: rpc=", forge_rpc, " low=", low_forge_res)
 		quit(1)
 		return true
-	print("PASS [65/66]: Blacksmith Forge 'forge_mythic' UDP RPC & Resource Boundary Guard verified (Speed %.0f->%.0f px/s, Total Forged=%d)." % [
+	print("PASS [65/68]: Blacksmith Forge 'forge_mythic' UDP RPC & Resource Boundary Guard verified (Speed %.0f->%.0f px/s, Total Forged=%d)." % [
 		pre_forge_spd,
 		post_forge_spd,
 		int(forge_snap.get("total_mythics_forged", 0))
 	])
 
-	# 66. Verify Failure Mode / Missing File Boundary Error Banner
+	# 66. Verify Boss Rush & Pantheon Gauntlet Mode ([I] Key / prop_gauntlet_banner.png — 41 PNGs / "start_gauntlet" RPC)
+	var start_g_rpc: Dictionary = udp_bridge.execute_remote_command("start_gauntlet", {})
+	var start_g_snap: Dictionary = start_g_rpc.get("snapshot", {})
+	if not arena.gauntlet_active or arena.gauntlet_stage != 1 or arena.dummies.size() != 3 or not bool(start_g_snap.get("gauntlet_active", false)) or arena.sprite_gen.textures.size() < 41:
+		printerr("FAIL: Pantheon Gauntlet [I] or prop_gauntlet_banner.png failed: rpc=", start_g_rpc, " sprites=", arena.sprite_gen.textures.size())
+		quit(1)
+		return true
+	print("PASS [66/68]: Pantheon Boss Gauntlet [I] & prop_gauntlet_banner.png Sprite verified (41 total PNGs, Stage %d, %d Elites/Bosses spawned)." % [
+		arena.gauntlet_stage,
+		arena.dummies.size()
+	])
+
+	# 67. Verify Pantheon Gauntlet Clear Champion Trophy Payout (+100g Gold, +2 Talents, +1 Relic, +1 Elixir & "check_gauntlet" RPC)
+	var pre_gauntlet_gold: int = arena.gold_coins
+	var pre_gauntlet_talents: int = arena.talent_points
+	for i in range(arena.dummies.size()):
+		if bool(arena.dummies[i].get("alive", true)):
+			arena.apply_damage_to_dummy(i, 999, false, false)
+	var chk_g_rpc: Dictionary = udp_bridge.execute_remote_command("check_gauntlet", {})
+	var chk_g_snap: Dictionary = chk_g_rpc.get("snapshot", {})
+	if arena.gauntlet_active or arena.total_gauntlets_cleared < 1 or int(chk_g_snap.get("total_gauntlets_cleared", 0)) < 1 or arena.gold_coins < pre_gauntlet_gold + 100 or arena.talent_points < pre_gauntlet_talents + 2:
+		printerr("FAIL: Pantheon Gauntlet completion payout or 'check_gauntlet' RPC failed: chk=", chk_g_rpc, " gold=", arena.gold_coins, " talents=", arena.talent_points)
+		quit(1)
+		return true
+	print("PASS [67/68]: Pantheon Gauntlet Champion Trophy & 'check_gauntlet' RPC verified (Gold +%dg, Talents %d->%d, Total Gauntlets Cleared=%d)." % [
+		arena.gold_coins - pre_gauntlet_gold,
+		pre_gauntlet_talents,
+		arena.talent_points,
+		arena.total_gauntlets_cleared
+	])
+
+	# 68. Verify Failure Mode / Missing File Boundary Error Banner
 	hud.toggle_arena_mode()
 	var missing_res: Dictionary = loader.load_character_data("res://data/NonExistentChaosFile.json")
 	if not missing_res.is_empty() or not hud.error_banner.visible:
 		printerr("FAIL: Missing file error banner did not trigger.")
 		quit(1)
 		return true
-	print("PASS [66/66]: Missing-file error state verified -> ", hud.error_banner.text)
+	print("PASS [68/68]: Missing-file error state verified -> ", hud.error_banner.text)
 
-	print("=== ALL 66 HEADLESS HUD, ARENA, ROSTER, ULTIMATES, BOSS, RELICS, SFX, POTIONS, PILLARS, CRITS, ENEMY BOLTS, PARRY, HAZARDS, FRENZY, AI PILOT, PIXEL-ART SPRITES, DUNGEON CRAWLER, BOSS ENRAGE, ELEMENTAL INFUSIONS, MERCHANT SHOP, SPIKE TRAPS, MIMICS, RESPAWN [R], TALENT TREE [T], FLOOR DESCENT [X], BOUNTY BOARD [J], TITLE SCREEN, SPIRIT OWL FAMILIAR [Z], DPS TELEMETRY [K], CURSED GAMBITS [U], WEATHER MUTATORS [Y], SENTRY TOTEMS [H], BLACKSMITH FORGE [O], UDP & SAVE/LOAD TESTS PASSED ===")
+	print("=== ALL 68 HEADLESS HUD, ARENA, ROSTER, ULTIMATES, BOSS, RELICS, SFX, POTIONS, PILLARS, CRITS, ENEMY BOLTS, PARRY, HAZARDS, FRENZY, AI PILOT, PIXEL-ART SPRITES, DUNGEON CRAWLER, BOSS ENRAGE, ELEMENTAL INFUSIONS, MERCHANT SHOP, SPIKE TRAPS, MIMICS, RESPAWN [R], TALENT TREE [T], FLOOR DESCENT [X], BOUNTY BOARD [J], TITLE SCREEN, SPIRIT OWL FAMILIAR [Z], DPS TELEMETRY [K], CURSED GAMBITS [U], WEATHER MUTATORS [Y], SENTRY TOTEMS [H], BLACKSMITH FORGE [O], PANTHEON GAUNTLET [I], UDP & SAVE/LOAD TESTS PASSED ===")
 	_main_instance.queue_free()
 	quit(0)
 	return true

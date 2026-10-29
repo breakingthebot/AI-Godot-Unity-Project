@@ -310,6 +310,14 @@ func execute_remote_command(command_name: String, payload: Dictionary = {}) -> D
 				var f_free: bool = bool(payload.get("force_free", false))
 				var fg_res: Dictionary = arena.forge_mythic_relic(rec_k, f_free)
 				action_note = "Remote RPC forged Mythic Relic -> %s (Total Forged: %d)" % [str(fg_res.get("recipe_key", fg_res.get("error", "none"))), int(fg_res.get("total_mythics_forged", 0))]
+		"start_gauntlet":
+			if arena != null and arena.has_method("start_pantheon_gauntlet"):
+				var sg_res: Dictionary = arena.start_pantheon_gauntlet()
+				action_note = "Remote RPC started Pantheon Gauntlet Stage %d (%d bosses spawned)" % [int(sg_res.get("gauntlet_stage", 1)), int(sg_res.get("enemies_spawned", 3))]
+		"check_gauntlet":
+			if arena != null and arena.has_method("check_gauntlet_completion"):
+				var cg_res: Dictionary = arena.check_gauntlet_completion()
+				action_note = "Remote RPC checked Pantheon Gauntlet -> %s (Total Cleared: %d)" % [str(cg_res.get("status", "inactive")), int(cg_res.get("total_gauntlets_cleared", 0))]
 		"toggle_mute":
 			if sfx_node != null and sfx_node.has_method("toggle_mute"):
 				var muted_now: bool = sfx_node.toggle_mute()
@@ -441,6 +449,10 @@ func build_telemetry_snapshot() -> Dictionary:
 		"total_totem_bolts_fired": int(arena.total_totem_bolts_fired) if arena != null else 0,
 		"totem_aura_active": bool(arena.is_hero_in_totem_aura()) if (arena != null and arena.has_method("is_hero_in_totem_aura")) else false,
 		"total_mythics_forged": int(arena.total_mythics_forged) if arena != null else 0,
+		"gauntlet_active": bool(arena.gauntlet_active) if arena != null else false,
+		"gauntlet_stage": int(arena.gauntlet_stage) if arena != null else 0,
+		"total_gauntlets_started": int(arena.total_gauntlets_started) if arena != null else 0,
+		"total_gauntlets_cleared": int(arena.total_gauntlets_cleared) if arena != null else 0,
 		"sfx_muted": bool(sfx_node.muted) if sfx_node != null else false,
 		"total_sfx_played": int(sfx_node.total_sfx_played) if sfx_node != null else 0,
 		"high_wave_reached": int(loader.high_wave_reached) if loader != null else 1,

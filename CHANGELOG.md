@@ -1,5 +1,9 @@
 # Changelog
 
+## [3.5.0] - 2026-10-29
+- Add Boss Rush & Pantheon Gauntlet Mode (`start_pantheon_gauntlet()`, `check_gauntlet_completion()` via **`[I]` key**, **`"Gauntlet (0) [I]"` button**, and `"start_gauntlet"` / `"check_gauntlet"` UDP RPCs) at the Pantheon War-Banner (`(510, 175)`), spawning a multi-elite & Boss arena trial (`Relic Mimic [ELITE]`, `Ashen Stalker [CHAMPION]`, and `Ashen Titan [BOSS]`) that awards a **Champion Trophy** (`+100g` Gold Coins, `+2` Talent Points, `+1` Guaranteed Relic, `+1` Healing Elixir, and full HP/MP restoration) upon completion.
+- Add `prop_gauntlet_banner.png` Pantheon Gauntlet War-Banner pixel-art sprite in `sprite_art_generator.gd` (bringing total exported `.png` sprites to 41) and expand headless Godot test suite to 68/68 assertions (`godot_project/tests/test_hud_headless.gd`).
+
 ## [3.4.0] - 2026-10-26
 - Add Relic Crafting & Blacksmith Forge (`forge_mythic_relic()` via **`[O]` key**, **`"Forge (0) [O]"` button**, and `"forge_mythic"` UDP RPC) at the Obsidian Blacksmith Anvil (`(510, 505)`), spending `50g` Gold Coins or reforging a duplicate Relic stack (`quantity >= 2`) into **Mythic Sovereign Ashblade** (`+8 Dmg, +15 Max HP`), **Mythic Obsidian Aegis** (`+5 Dmg, +25 Max HP`), or **Mythic Stormstrider Greaves** (`+6 Dmg, +25 Spd`).
 - Add `prop_anvil.png` Obsidian Blacksmith Anvil pixel-art sprite in `sprite_art_generator.gd` (bringing total exported `.png` sprites to 40) and expand headless Godot test suite to 66/66 assertions (`godot_project/tests/test_hud_headless.gd`).

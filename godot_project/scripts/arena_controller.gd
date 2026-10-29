@@ -198,6 +198,11 @@ var deployed_totems: Array[Dictionary] = []
 var total_totems_deployed: int = 0
 var total_totem_bolts_fired: int = 0
 var total_mythics_forged: int = 0
+var gauntlet_active: bool = false
+var gauntlet_stage: int = 0
+var gauntlet_elapsed_seconds: float = 0.0
+var total_gauntlets_started: int = 0
+var total_gauntlets_cleared: int = 0
 
 const FAMILIAR_ORBIT_RADIUS: float = 48.0
 const FAMILIAR_ORBIT_SPEED: float = 2.6
@@ -224,6 +229,9 @@ const TOTEM_MANA_COST: int = 8
 const FORGE_ANVIL_POS: Vector2 = Vector2(510.0, 505.0)
 const FORGE_GOLD_COST: int = 50
 const MYTHIC_FORGE_RECIPES: Array[String] = ["mythic_ashblade", "mythic_aegis", "mythic_stormstrider"]
+const GAUNTLET_BANNER_POS: Vector2 = Vector2(510.0, 175.0)
+const GAUNTLET_CLEAR_GOLD_REWARD: int = 100
+const GAUNTLET_CLEAR_TALENT_REWARD: int = 2
 
 var _ui_layer: CanvasLayer
 var _status_label: Label
@@ -238,6 +246,7 @@ var _gambit_btn: Button
 var _mutator_btn: Button
 var _totem_btn: Button
 var _forge_btn: Button
+var _gauntlet_btn: Button
 var _telemetry_btn: Button
 var _sfx_btn: Button
 
@@ -2415,6 +2424,160 @@ func forge_mythic_relic(recipe_key: String = "", force_free: bool = false) -> Di
 	}
 
 
+## Launches the Boss Rush & Pantheon Gauntlet Trial ([I] Key / "Gauntlet [I]" Button / "start_gauntlet" RPC),
+## spawning a multi-elite & Boss arena encounter with a +100g & +2 Talent Points Champion Trophy upon completion.
+func start_pantheon_gauntlet() -> Dictionary:
+	gauntlet_active = true
+	gauntlet_stage += 1
+	total_gauntlets_started += 1
+	gauntlet_elapsed_seconds = 0.0
+	wave_survival_active = true
+	if _wave_btn != null:
+		_wave_btn.text = "Wave Survival: ON [G]"
+
+	var scale_mult: int = maxi(1, gauntlet_stage)
+	var mimic_hp: int = 95 + scale_mult * 15
+	var stalker_hp: int = 110 + scale_mult * 20
+	var boss_hp: int = 240 + scale_mult * 40
+	dummies = [
+		{
+			"name": "Relic Mimic [ELITE]",
+			"pos": Vector2(760.0, 220.0),
+			"hp": mimic_hp,
+			"max_hp": mimic_hp,
+			"speed": BASE_ENEMY_CHASE_SPEED * 1.22,
+			"alive": true,
+			"is_boss": false,
+			"is_mimic": true,
+			"relic_index": (gauntlet_stage - 1) % 3,
+			"radius": 24.0,
+			"flash_timer": 0.20,
+			"color": Color(0.92, 0.28, 0.58)
+		},
+		{
+			"name": "Ashen Stalker [CHAMPION]",
+			"pos": Vector2(860.0, 480.0),
+			"hp": stalker_hp,
+			"max_hp": stalker_hp,
+			"speed": BASE_ENEMY_CHASE_SPEED * 1.18,
+			"alive": true,
+			"is_boss": false,
+			"is_mimic": false,
+			"radius": 24.0,
+			"flash_timer": 0.20,
+			"color": Color(0.95, 0.55, 0.22)
+		},
+		{
+			"name": "Ashen Titan [BOSS]",
+			"pos": Vector2(945.0, 350.0),
+			"hp": boss_hp,
+			"max_hp": boss_hp,
+			"speed": BASE_ENEMY_CHASE_SPEED * 0.92,
+			"alive": true,
+			"is_boss": true,
+			"enraged": false,
+			"radius": 34.0,
+			"flash_timer": 0.25,
+			"color": Color(0.98, 0.24, 0.18)
+		}
+	]
+
+	var c_key := get_room_key(current_room_coord)
+	if dungeon_rooms.has(c_key):
+		dungeon_rooms[c_key]["cleared"] = false
+
+	if _gauntlet_btn != null:
+		_gauntlet_btn.text = "Gauntlet: ON [I]"
+
+	spawn_particle_burst(GAUNTLET_BANNER_POS, Color(1.0, 0.35, 0.22), 22, 1.45)
+	for d in dummies:
+		spawn_particle_burst(d.get("pos", Vector2(860.0, 350.0)), Color(1.0, 0.65, 0.18), 16, 1.3)
+	trigger_screen_shake(0.48)
+	spawn_floating_text(player_pos + Vector2(0, -26), "PANTHEON GAUNTLET STAGE %d! [I]" % gauntlet_stage, Color(1.0, 0.84, 0.24), true)
+	_play_sfx("boss_spawn")
+
+	var msg := "[PANTHEON GAUNTLET STAGE %d STARTED! [I]] Defeat Relic Mimic [ELITE], Ashen Stalker [CHAMPION] & Ashen Titan [BOSS] for +%dg Gold, +%d Talent Points & +1 Relic!" % [
+		gauntlet_stage,
+		GAUNTLET_CLEAR_GOLD_REWARD,
+		GAUNTLET_CLEAR_TALENT_REWARD
+	]
+	if _combat_banner != null:
+		_combat_banner.text = msg
+	arena_combat_event.emit(msg)
+	_refresh_status_bar()
+	queue_redraw()
+	return {
+		"status": "gauntlet_started",
+		"gauntlet_active": gauntlet_active,
+		"gauntlet_stage": gauntlet_stage,
+		"enemies_spawned": dummies.size(),
+		"total_gauntlets_started": total_gauntlets_started,
+		"message": msg
+	}
+
+
+## Evaluates whether an active Pantheon Boss Gauntlet has been cleared, granting Champion Trophy rewards (+100g, +2 Talents, +1 Relic, +1 Elixir).
+func check_gauntlet_completion() -> Dictionary:
+	if not gauntlet_active:
+		return {"status": "inactive", "gauntlet_active": false, "total_gauntlets_cleared": total_gauntlets_cleared}
+	if not _are_all_dummies_defeated():
+		var alive_cnt: int = 0
+		for d in dummies:
+			if bool(d.get("alive", true)):
+				alive_cnt += 1
+		return {
+			"status": "in_progress",
+			"gauntlet_active": true,
+			"gauntlet_stage": gauntlet_stage,
+			"alive_enemies": alive_cnt,
+			"total_gauntlets_cleared": total_gauntlets_cleared
+		}
+
+	gauntlet_active = false
+	total_gauntlets_cleared += 1
+	var coin_res: Dictionary = spawn_coin_drop(player_pos, GAUNTLET_CLEAR_GOLD_REWARD, true)
+	var gold_awarded: int = int(coin_res.get("amount", GAUNTLET_CLEAR_GOLD_REWARD))
+	talent_points += GAUNTLET_CLEAR_TALENT_REWARD
+	if loader != null:
+		if loader.has_method("grant_relic_item"):
+			loader.grant_relic_item((total_gauntlets_cleared - 1) % 3)
+		if loader.has_method("grant_consumable_potion"):
+			loader.grant_consumable_potion(1)
+		loader.modify_health(999)
+		loader.modify_mana(999, true)
+
+	if _gauntlet_btn != null:
+		_gauntlet_btn.text = "Gauntlet (%d) [I]" % total_gauntlets_cleared
+	if _talent_btn != null:
+		_talent_btn.text = "Talent (%d) [T]" % talent_points
+
+	spawn_particle_burst(GAUNTLET_BANNER_POS, Color(1.0, 0.88, 0.25), 26, 1.55)
+	spawn_particle_burst(player_pos, Color(1.0, 0.92, 0.32), 24, 1.45)
+	trigger_screen_shake(0.45)
+	spawn_floating_text(player_pos + Vector2(0, -28), "GAUNTLET CLEARED! (+%dg & +%d TALENTS)" % [gold_awarded, GAUNTLET_CLEAR_TALENT_REWARD], Color(1.0, 0.92, 0.26), true)
+	_play_sfx("level_up")
+
+	var msg := "[PANTHEON GAUNTLET STAGE %d CLEARED! [I]] Champion Trophy Awarded: +%dg Gold, +%d Talent Points [T], +1 Relic, +1 Elixir & Full HP/MP Restore!" % [
+		gauntlet_stage,
+		gold_awarded,
+		GAUNTLET_CLEAR_TALENT_REWARD
+	]
+	if _combat_banner != null:
+		_combat_banner.text = msg
+	arena_combat_event.emit(msg)
+	_refresh_status_bar()
+	queue_redraw()
+	return {
+		"status": "gauntlet_cleared",
+		"gauntlet_active": gauntlet_active,
+		"gauntlet_stage": gauntlet_stage,
+		"gold_awarded": gold_awarded,
+		"talents_awarded": GAUNTLET_CLEAR_TALENT_REWARD,
+		"total_gauntlets_cleared": total_gauntlets_cleared,
+		"message": msg
+	}
+
+
 func _build_arena_overlay() -> void:
 	_ui_layer = CanvasLayer.new()
 	_ui_layer.name = "ArenaOverlay"
@@ -2655,6 +2818,13 @@ func _build_arena_overlay() -> void:
 	_forge_btn.add_theme_font_size_override("font_size", 11)
 	_forge_btn.pressed.connect(func() -> void: forge_mythic_relic())
 	row2.add_child(_forge_btn)
+
+	_gauntlet_btn = Button.new()
+	_gauntlet_btn.name = "PantheonGauntletButton"
+	_gauntlet_btn.text = "Gauntlet (0) [I]"
+	_gauntlet_btn.add_theme_font_size_override("font_size", 11)
+	_gauntlet_btn.pressed.connect(func() -> void: start_pantheon_gauntlet())
+	row2.add_child(_gauntlet_btn)
 
 	var lvl_btn := Button.new()
 	lvl_btn.text = "Level Up [L]"
@@ -3618,6 +3788,10 @@ func apply_damage_to_dummy(dummy_index: int, damage: int, is_crit: bool = false,
 				str(dummy.get("name", "Enemy")),
 				gold_reward
 			]
+			if gauntlet_active:
+				var g_clear := check_gauntlet_completion()
+				if str(g_clear.get("status", "")) == "gauntlet_cleared":
+					msg = str(g_clear.get("message", msg))
 		else:
 			msg = "%s[Enemy Defeated!] %s eliminated %s (+%dg, +%d Score)!" % [
 				crit_prefix,
@@ -3736,6 +3910,8 @@ func _unhandled_input(event: InputEvent) -> void:
 				deploy_arcane_totem()
 			elif ke.keycode == KEY_O:
 				forge_mythic_relic()
+			elif ke.keycode == KEY_I:
+				start_pantheon_gauntlet()
 
 
 func _process(delta: float) -> void:
@@ -3821,6 +3997,8 @@ func _process(delta: float) -> void:
 	# 4. Step Floating Combat Text popups, Pixel-Spark Particles, and decay hit flash timers
 	_anim_time += delta
 	combat_elapsed_seconds += delta
+	if gauntlet_active:
+		gauntlet_elapsed_seconds += delta
 	step_floating_texts(delta)
 	step_particles(delta)
 	for i in range(dummies.size()):
@@ -4117,6 +4295,16 @@ func _draw() -> void:
 		draw_texture_rect(anvil_tex, Rect2(FORGE_ANVIL_POS - Vector2(22, 18), Vector2(44, 36)), false)
 	if font != null:
 		draw_string(font, FORGE_ANVIL_POS + Vector2(-68, -24), "Blacksmith Forge [O | %dg]" % FORGE_GOLD_COST, HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(1.0, 0.85, 0.35))
+
+	var banner_tex: Texture2D = sprite_gen.get_prop_texture("prop_gauntlet_banner")
+	var g_ring_col := Color(1.0, 0.28, 0.22, 0.90) if gauntlet_active else Color(1.0, 0.82, 0.26, 0.74)
+	draw_circle(GAUNTLET_BANNER_POS + Vector2(0, 12), 20.0, Color(0.08, 0.03, 0.03, 0.65))
+	draw_arc(GAUNTLET_BANNER_POS, 26.0 + sin(_anim_time * 7.0) * 2.5, 0.0, TAU, 32, g_ring_col, 2.2)
+	if banner_tex != null:
+		draw_texture_rect(banner_tex, Rect2(GAUNTLET_BANNER_POS - Vector2(22, 22), Vector2(44, 42)), false)
+	if font != null:
+		var g_lbl := "GAUNTLET ACTIVE [I | S%d | %.1fs]" % [gauntlet_stage, gauntlet_elapsed_seconds] if gauntlet_active else "Pantheon Gauntlet [I | +100g & +2T]"
+		draw_string(font, GAUNTLET_BANNER_POS + Vector2(-78, -26), g_lbl, HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(1.0, 0.45, 0.35) if gauntlet_active else Color(1.0, 0.88, 0.38))
 
 	# 4C. Deployable Runic Crossfire Sentry Totems ([H] Key / prop_totem.png + +15% Attack Aura)
 	var totem_tex: Texture2D = sprite_gen.get_prop_texture("prop_totem")
